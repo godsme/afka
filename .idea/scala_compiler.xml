@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ScalaCompilerConfiguration">
+    <profile name="SBT 1" modules="root" />
+    <profile name="SBT 2" modules="core,macros">
+      <parameters>
+        <parameter value="-Xplugin-require:macroparadise" />
+      </parameters>
+      <plugins>
+        <plugin path="$USER_HOME$/.ivy2/cache/org.scalameta/paradise_2.11.8/jars/paradise_2.11.8-3.0.0-beta4.jar" />
+      </plugins>
+    </profile>
+  </component>
+</project>

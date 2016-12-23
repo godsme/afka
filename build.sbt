@@ -33,6 +33,7 @@ lazy val root = project
 
 lazy val core = project.settings(
   allSettings,
+  macroSettings,
   moduleName := "macro-tut",
   libraryDependencies ++= Seq(
     //"com.lihaoyi"    %% "sourcecode"   % "0.1.2",
@@ -43,7 +44,7 @@ lazy val core = project.settings(
     "org.scalactic"                  %% "scalactic" % "3.0.1"
     //"com.googlecode.java-diff-utils" % "diffutils"  % "1.3.0" % "test"
   )
-)
+).dependsOn(macros)
 
 lazy val macros = project.settings(
   allSettings,
