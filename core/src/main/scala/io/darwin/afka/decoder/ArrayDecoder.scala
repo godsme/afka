@@ -31,8 +31,8 @@ object ArrayDecoder {
     new VarSizeDecoder[Array[A]](ch => ch.getInt)(new WithSizeArrayDecoder[A](decoder))
   }
 
-  def makeNullable[A](implicit decoder: WithSizeDecoder[Array[A]]): KafkaDecoder[Option[Array[A]]] = {
-    new VarSizeDecoder[Option[Array[A]]](ch => ch.getInt)(new WithSizeNullableArrayDecoder[A](decoder))
+  def makeNullable[A: ClassTag](implicit decoder: KafkaDecoder[A]): KafkaDecoder[Option[Array[A]]] = {
+    new VarSizeDecoder[Option[Array[A]]](ch => ch.getInt)(new NullableDecoder[Array[A]](new WithSizeArrayDecoder[A](decoder)))
   }
 }
 

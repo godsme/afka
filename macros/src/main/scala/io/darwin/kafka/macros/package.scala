@@ -40,15 +40,28 @@ package object macros {
        """
   }
 
+  def getPatVarTerm(name: String): Pat.Var.Term = {
+    Pat.Var.Term(Term.Name(name))
+  }
+
   def createArrayDecoder(name: Type.Name): Defn.Val = {
-    Defn.Val(Seq(Mod.Implicit()), Seq(Pat.Var.Term(Term.Name("ARRAY_OF_" + name.toString))), None, Term.ApplyType(Term.Select(Term.Name("ArrayDecoder"), Term.Name("make")), Seq(Type.Name(name.toString))))
+    q"""
+       implicit val ${getPatVarTerm("ARRAY_OF_" + name.toString)} = ArrayDecoder.make[${Type.Name(name.toString)}]
+     """
+  }
+
+  def createNullArrayDecoder(name: Type.Name): Defn.Val = {
+    q"""
+       implicit val ${getPatVarTerm("NULLARRAY_OF_" + name.toString)} = ArrayDecoder.makeNullable[${Type.Name(name.toString)}]
+     """
   }
 
   def createDecoders(name: Type.Name, paramss: Seq[Seq[Term.Param]]) : Seq[Stat]= {
     val imp = createImports
     val decoder = createDecoderObject(name, paramss)
     val arrayDecoder = createArrayDecoder(name)
-    Seq(imp, q"$decoder", q"$arrayDecoder")
+    val nullArrayDecoder = createNullArrayDecoder(name)
+    Seq(imp, q"$decoder", q"$arrayDecoder", q"$nullArrayDecoder")
   }
 
   def createPacketDecoder(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Seq[Stat] = {
