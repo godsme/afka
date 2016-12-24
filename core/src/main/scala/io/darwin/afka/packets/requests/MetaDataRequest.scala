@@ -1,14 +1,12 @@
-package io.darwin.afka.packets
+package io.darwin.afka.packets.requests
 
-import io.darwin.afka.SinkChannel
-import io.darwin.afka.encoder.KafkaEncoder
-import io.darwin.macros.KafkaRequest
-import io.darwin.afka.encoder._
+import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel, _}
+import io.darwin.kafka.macros.KafkaRequest
 
 /**
   * Created by darwin on 24/12/2016.
   */
-@KafkaRequest(key = 1)
+@KafkaRequest(apiKey = 1, version = 1)
 case class MetaDataRequest
   ( val topics: Option[Array[String]],
     val name: Byte )

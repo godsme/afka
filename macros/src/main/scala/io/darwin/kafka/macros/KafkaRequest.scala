@@ -1,4 +1,4 @@
-package io.darwin.macros
+package io.darwin.kafka.macros
 
 import scala.annotation.compileTimeOnly
 import scala.meta._
@@ -7,7 +7,7 @@ import scala.meta._
   */
 
 @compileTimeOnly("kafka request encoder generator")
-class KafkaRequest(key: Int) extends scala.annotation.StaticAnnotation {
+class KafkaRequest(apiKey: Int, version: Int = 0) extends scala.annotation.StaticAnnotation {
   inline def apply(defn: Any): Any = meta {
 
     def parseParams(p: Term.Param) = p match {

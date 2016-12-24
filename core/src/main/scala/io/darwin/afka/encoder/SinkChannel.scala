@@ -1,4 +1,4 @@
-package io.darwin.afka
+package io.darwin.afka.encoder
 
 import java.nio.ByteBuffer
 

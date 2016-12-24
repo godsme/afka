@@ -7,7 +7,7 @@ import java.nio.ByteBuffer
   */
 package object encoder {
 
-  implicit object StringEncoder extends KafkaEncoder[String] {
+  implicit object STRING extends KafkaEncoder[String] {
 
     override def encode(ch: SinkChannel, o: String) = {
       val bytes: Array[Byte] = o.getBytes("UTF8")
@@ -22,7 +22,7 @@ package object encoder {
 
   }
 
-  implicit object ByteBufferEncoder extends KafkaEncoder[ByteBuffer] {
+  implicit object BYTES extends KafkaEncoder[ByteBuffer] {
     override def encode(ch: SinkChannel, o: ByteBuffer) = {
       val pos = o.position()
 
@@ -33,52 +33,34 @@ package object encoder {
     }
   }
 
-  implicit object BoolEncoder extends KafkaEncoder[Boolean] {
+  implicit object BOOLEAN extends KafkaEncoder[Boolean] {
     override def encode(ch: SinkChannel, o: Boolean) = {
       ch.putByte((if(o) 1 else 0).toByte)
     }
   }
 
-  implicit object ByteEncoder extends KafkaEncoder[Byte] {
-    override def encode(ch: SinkChannel, o: Byte) = {
-      ch.putByte(o)
-    }
+  implicit object INT8 extends KafkaEncoder[Byte] {
+    override def encode(ch: SinkChannel, o: Byte) = ch.putByte(o)
   }
 
-  implicit object ShortEncoder extends KafkaEncoder[Short] {
-    override def encode(ch: SinkChannel, o: Short) = {
-      ch.putShort(o)
-    }
+  implicit object INT16 extends KafkaEncoder[Short] {
+    override def encode(ch: SinkChannel, o: Short) = ch.putShort(o)
   }
 
-  implicit object IntEncoder extends KafkaEncoder[Int] {
-    override def encode(ch: SinkChannel, o: Int) = {
-      ch.putInt(o)
-    }
+  implicit object INT32 extends KafkaEncoder[Int] {
+    override def encode(ch: SinkChannel, o: Int) = ch.putInt(o)
   }
 
-  implicit object LongEncoder extends KafkaEncoder[Long] {
-    override def encode(ch: SinkChannel, o: Long) = {
-      ch.putLong(o)
-    }
+  implicit object INT64 extends KafkaEncoder[Long] {
+    override def encode(ch: SinkChannel, o: Long) = ch.putLong(o)
   }
 
-  implicit object ShortNullEncoder extends NullObjectEncoder[Short] {
-    override def encodeNull(ch: SinkChannel) = ch.putShort(-1)
-  }
+  implicit object STRING_ARRAY extends ArrayEncoder[String]
 
-  implicit object IntNullEncoder extends NullObjectEncoder[Int] {
-    override def encodeNull(ch: SinkChannel) = ch.putInt(-1)
-  }
+  implicit object NULL_STRING_ARRAY extends NullableArrayEncoder[String]
 
-  implicit object StringArrayEncoder extends ArrayEncoder[String]
+  implicit object NULL_BYTES extends NullableEncoder[ByteBuffer]((ch, v) => ch.putInt(v))
 
-  implicit object NullableArrayOfStringEncoder extends NullableEncoder[Array[String], Short]
-
-  implicit object NullableByteBufferEncoder extends NullableEncoder[ByteBuffer, Int]
-
-  def encoding[A](ch: SinkChannel, o: A)(implicit encoder: KafkaEncoder[A]) = {
-    encoder.encode(ch, o)
-  }
+  def encoding[A](ch: SinkChannel, o: A)(implicit encoder: KafkaEncoder[A]) = encoder.encode(ch, o)
 
 }

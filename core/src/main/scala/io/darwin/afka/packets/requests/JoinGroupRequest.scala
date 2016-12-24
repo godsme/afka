@@ -1,11 +1,9 @@
-package io.darwin.afka.packets
+package io.darwin.afka.packets.requests
 
 import java.nio.ByteBuffer
 
-import io.darwin.afka.SinkChannel
-import io.darwin.afka.encoder.KafkaEncoder
-import io.darwin.macros.{KafkaRequest, KafkaRequestElement}
-import io.darwin.afka.encoder._
+import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel, _}
+import io.darwin.kafka.macros.{KafkaRequest, KafkaRequestElement}
 
 /**
   * Created by darwin on 24/12/2016.
@@ -26,10 +24,11 @@ object GroupProtocol {
   }
 
   implicit object ArrayOfGroupProtocolEncoder extends ArrayEncoder[GroupProtocol]
+  implicit object NullableArrayOfGroupProtocolEncoder extends NullableArrayEncoder[GroupProtocol]
 }
 
 
-@KafkaRequest(key = 11)
+@KafkaRequest(apiKey = 11, version = 1)
 case class JoinGroupRequest
   ( groupId:          String,
     sessionTimeout:   Int,
