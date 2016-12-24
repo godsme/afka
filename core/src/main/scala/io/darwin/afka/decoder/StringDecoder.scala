@@ -17,7 +17,7 @@ object StringDecoder {
 
   }
 
-  implicit object WithSizeNullableStringDecoder extends NullableDecoder[String]
+  implicit object WithSizeNullableStringDecoder extends NullableDecoder[String](WithSizeStringDecoder)
 
   class KafkaStringDecoder[A](implicit decoder: WithSizeDecoder[A])
     extends VarSizeDecoder[A](_.getShort.toInt)

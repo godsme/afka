@@ -10,11 +10,30 @@ import scala.meta._
 class KafkaRequest(apiKey: Int, version: Int = 0) extends scala.annotation.StaticAnnotation {
   inline def apply(defn: Any): Any = meta {
 
+    def findRootType(tp: Tree): String = {
+      if(tp.children.size == 0) tp.toString
+      else if(tp.children.size != 2) {
+        throw new Exception("Invalid Type")
+      }
+      else{
+        val children = tp.children.toArray
+        if(!isValidWrapperType(children(0).toString)) {
+          throw new Exception("Unknown Type Wrapper")
+        }
+        else {
+          findRootType(children(1))
+        }
+      }
+    }
+
     def parseParams(p: Term.Param) = p match {
       case param"..$mods $paramname: $tpeopt = $expropt" => {
-        val t: Option[Type.Arg] = tpeopt
+        if(tpeopt.isEmpty) throw new Exception("no type")
+        val tp: Type.Arg = tpeopt.get
 
-        println(t.get.toString)
+        println(tp.toString + ":" + tp.children.size)
+
+        println("root type = " + findRootType(tp))
       }
       case _ => throw new Exception("invalid parameter")
     }

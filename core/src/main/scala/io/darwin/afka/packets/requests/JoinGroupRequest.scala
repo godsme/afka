@@ -32,7 +32,7 @@ object GroupProtocol {
 case class JoinGroupRequest
   ( groupId:          String,
     sessionTimeout:   Int,
-    rebalanceTimeout: Int,
+    rebalanceTimeout: Option[Array[Int]],
     memberId:         String = "",
     protocolType:     String,
     protocols:        Array[GroupProtocol])

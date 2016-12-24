@@ -8,8 +8,7 @@ import io.darwin.kafka.macros.KafkaRequest
   */
 @KafkaRequest(apiKey = 1, version = 1)
 case class MetaDataRequest
-  ( val topics: Option[Array[String]],
-    val name: Byte )
+  ( val topics: Option[Array[String]],val name: Byte )
 
 
 object MetaDataRequestEncoder extends KafkaEncoder[MetaDataRequest] {

@@ -55,8 +55,17 @@ package object encoder {
     override def encode(ch: SinkChannel, o: Long) = ch.putLong(o)
   }
 
-  implicit object STRING_ARRAY extends ArrayEncoder[String]
+  implicit object INT8_ARRAY extends ArrayEncoder[Byte]
+  implicit object INT16_ARRAY extends ArrayEncoder[Short]
+  implicit object INT32_ARRAY extends ArrayEncoder[Int]
+  implicit object INT64_ARRAY extends ArrayEncoder[Long]
 
+  implicit object NULL_INT8_ARRAY extends NullableArrayEncoder[Byte]
+  implicit object NULL_INT16_ARRAY extends NullableArrayEncoder[Short]
+  implicit object NULL_INT32_ARRAY extends NullableArrayEncoder[Int]
+  implicit object NULL_INT64_ARRAY extends NullableArrayEncoder[Long]
+
+  implicit object STRING_ARRAY extends ArrayEncoder[String]
   implicit object NULL_STRING_ARRAY extends NullableArrayEncoder[String]
 
   implicit object NULL_BYTES extends NullableEncoder[ByteBuffer]((ch, v) => ch.putInt(v))
