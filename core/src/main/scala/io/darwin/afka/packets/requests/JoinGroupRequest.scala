@@ -17,7 +17,8 @@ case class GroupProtocol
 @KafkaRequestPacket(apiKey = 11, version = 1)
 case class JoinGroupRequest
   ( groupId:          String,
-    sessionTimeout:   Int,rebalanceTimeout: Int,
+    sessionTimeout:   Int,
+    rebalanceTimeout: Int,
     memberId:         String = "",
     protocolType:     String,
     protocols:        Array[GroupProtocol])

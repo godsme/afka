@@ -1,6 +1,6 @@
 package io.darwin.afka.packets.requests
 
-import java.nio.channels.Pipe.SinkChannel
+import io.darwin.afka.encoder.SinkChannel
 
 /**
   * Created by darwin on 25/12/2016.

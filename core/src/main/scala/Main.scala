@@ -1,9 +1,8 @@
 import java.net.InetSocketAddress
-import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
 
 import io.darwin.afka.encoder.{ScatteredSinkByteBuffer, encoding}
-import io.darwin.afka.packets.requests.MetaDataRequest
+import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
 
 /**
   * Created by darwin on 25/12/2016.
@@ -18,7 +17,9 @@ object Main extends App {
 
   var buf = ScatteredSinkByteBuffer()
 
-  MetaDataRequest().encode(buf, 1, "abc")
+  val req: KafkaRequest = MetaDataRequest()
+
+  req.encode(buf, 1, "abc")
 
   val bufs = buf.get
 

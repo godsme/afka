@@ -7,6 +7,6 @@ import io.darwin.kafka.macros.KafkaRequestPacket
   */
 @KafkaRequestPacket(apiKey = 3, version = 1)
 case class MetaDataRequest
-( val topics: Option[Array[String]] = None)
+  ( val topics: Option[Array[String]] = None )
 
 

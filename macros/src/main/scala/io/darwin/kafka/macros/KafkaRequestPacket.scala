@@ -19,6 +19,15 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
 
     defn match {
       case cls @ Defn.Class(_, name, _, ctor, _) => {
+
+        val parents: Seq[Ctor.Call] = cls.templ.parents
+
+        val newP: Ctor.Call =
+          ctor"""
+           KafkaRequest
+         """
+        val pp = parents.+:(newP)
+
         val q"new $_(..${args})" = this
 
         var thisMap = Map[String, Term.Arg]()
@@ -41,7 +50,7 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
 
         val encoding =
           q"""
-           def encode(chan: SinkChannel, correlationId: Int, clientId: String) = {
+           override def encode(chan: SinkChannel, correlationId: Int, clientId: String) = {
              ..$applySeq
            }
          """
@@ -50,8 +59,7 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
 
         val newStats: Seq[Stat] = Seq(q"$imports", q"$encoding") ++: cls.templ.stats.getOrElse(Nil)
 
-        val newCls = cls.copy(templ = cls.templ.copy(stats = Some(newStats)))
-
+        val newCls = cls.copy(templ = cls.templ.copy(parents=pp, stats = Some(newStats)))
         println(newCls.toString())
 
         newCls
