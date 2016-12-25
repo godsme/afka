@@ -22,11 +22,11 @@ package object macros {
 //  }
 
   def createImports: Stat = {
-    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, decoding}"
+    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, decoding}"
   }
 
   def createEncoderImports: Stat = {
-    q"import io.darwin.afka.encoder.{ArrayEncoder, KafkaEncoder, SinkChannel, _}"
+    q"import io.darwin.afka.encoder.{ArrayEncoder, KafkaEncoder, SinkChannel, encoding}"
   }
 
   def createDecoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {
@@ -40,7 +40,7 @@ package object macros {
     val decoderName = name.toString + "Decoder"
     q"""
          implicit object ${Term.Name(decoderName)} extends KafkaDecoder[$name] {
-            override def decode(chan: SourceChannel): $name = {
+            override def decode(chan: java.nio.ByteBuffer): $name = {
                ${Ctor.Ref.Name(name.value)}(...$args)
             }
          }

@@ -1,6 +1,6 @@
 package io.darwin.afka.decoder
 
-import io.darwin.afka.SchemaException
+import java.nio.ByteBuffer
 
 /**
   * Created by darwin on 24/12/2016.
@@ -9,9 +9,9 @@ object StringDecoder {
 
   implicit object WithSizeStringDecoder extends WithSizeObjectDecoder[String] {
 
-    override def doDecode(chan: SourceChannel, size: Int): String = {
+    override def doDecode(chan: ByteBuffer, size: Int): String = {
       val bytes = new Array[Byte](size)
-      chan.getBytes(bytes)
+      chan.get(bytes)
       new String(bytes, "UTF8")
     }
 
