@@ -23,7 +23,7 @@ lazy val root = project
   .in(file("."))
   .settings(
     allSettings,
-    moduleName := "macro-tuturial"
+    moduleName := "afka"
   )
   .aggregate(
     core,
@@ -34,15 +34,14 @@ lazy val root = project
 lazy val core = project.settings(
   allSettings,
   macroSettings,
-  moduleName := "macro-tut",
+  moduleName := "afka-core",
   libraryDependencies ++= Seq(
-    //"com.lihaoyi"    %% "sourcecode"   % "0.1.2",
     "org.scalameta"  %% "scalameta"    % "1.4.0",
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     // Test dependencies
     "org.scalatest"                  %% "scalatest" % "3.0.1" % "test",
-    "org.scalactic"                  %% "scalactic" % "3.0.1"
-    //"com.googlecode.java-diff-utils" % "diffutils"  % "1.3.0" % "test"
+    "org.scalactic"                  %% "scalactic" % "3.0.1",
+    "com.googlecode.java-diff-utils" % "diffutils"  % "1.3.0" % "test"
   )
 ).dependsOn(macros)
 

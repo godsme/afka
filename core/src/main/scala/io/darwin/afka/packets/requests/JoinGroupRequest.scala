@@ -3,7 +3,7 @@ package io.darwin.afka.packets.requests
 import java.nio.ByteBuffer
 
 import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel, _}
-import io.darwin.kafka.macros.{KafkaRequest, KafkaRequestElement}
+import io.darwin.kafka.macros.{KafkaRequestPacket, KafkaRequestElement}
 
 /**
   * Created by darwin on 24/12/2016.
@@ -27,28 +27,23 @@ object GroupProtocol {
   implicit object NullableArrayOfGroupProtocolEncoder extends NullableArrayEncoder[GroupProtocol]
 }
 
-
-@KafkaRequest(apiKey = 11, version = 1)
+@KafkaRequestPacket(apiKey = 11, version = 1)
 case class JoinGroupRequest
   ( groupId:          String,
     sessionTimeout:   Int,
-    rebalanceTimeout: Option[Array[Int]],
+    rebalanceTimeout: Int,
     memberId:         String = "",
     protocolType:     String,
-    protocols:        Array[GroupProtocol])
+    protocols:        Array[GroupProtocol]) {
 
-
-object JoinGroupRequestObject {
-
-  implicit object JoinGroupRequestEncoder extends KafkaEncoder[JoinGroupRequest] {
-    override def encode(ch: SinkChannel, o: JoinGroupRequest) = {
-      encoding(ch, o.groupId)
-      encoding(ch, o.sessionTimeout)
-      encoding(ch, o.rebalanceTimeout)
-      encoding(ch, o.memberId)
-      encoding(ch, o.protocolType)
-      encoding(ch, o.protocols)
-    }
+  def encode(chan: SinkChannel, correlationId: Int, clientId: String) {
+      RequestHeader(11, 1, correlationId, clientId).encode(chan)
+      encoding(chan, groupId)
+      encoding(chan, sessionTimeout)
+      encoding(chan, rebalanceTimeout)
+      encoding(chan, memberId)
+      encoding(chan, protocolType)
+      encoding(chan, protocols)
   }
-
 }
+

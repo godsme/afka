@@ -8,18 +8,18 @@ import scala.meta.{Defn, _}
   */
 package object macros {
 
-  private val wrapperTypes: Array[String] = Array("Option", "Array")
-
-  def isValidWrapperType(tp: String): Boolean = {
-    wrapperTypes.contains(tp)
-  }
-
-  private val predefinedTypes: Array[String] =
-    Array("Boolean","Byte","Short","Int","Long","String","ByteBuffer")
-
-  def isPredefinedType(tp: String): Boolean = {
-    predefinedTypes.contains(tp)
-  }
+//  private val wrapperTypes: Array[String] = Array("Option", "Array")
+//
+//  def isValidWrapperType(tp: String): Boolean = {
+//    wrapperTypes.contains(tp)
+//  }
+//
+//  private val predefinedTypes: Array[String] =
+//    Array("Boolean","Byte","Short","Int","Long","String","ByteBuffer")
+//
+//  def isPredefinedType(tp: String): Boolean = {
+//    predefinedTypes.contains(tp)
+//  }
 
   def createImports: Stat = {
     q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, decoding}"

@@ -1,6 +1,6 @@
 package io.darwin.afka.packets.responses
 
-import io.darwin.kafka.macros.{KafkaResponse, KafkaResponseElement}
+import io.darwin.kafka.macros.{KafkaResponsePacket, KafkaResponseElement}
 
 /**
   * Created by darwin on 24/12/2016.
@@ -15,18 +15,20 @@ case class Broker
 
 @KafkaResponseElement
 case class PartitionMetaData
-  ( errorCode : Short,id        : Int,
+  ( errorCode : Short,
+    id        : Int,
     leader    : Int,
     replicas  : Array[Int],
     isr       : Array[Int])
 
 @KafkaResponseElement
 case class TopicMetaData
-  ( errorCode : Short,topic:      String,
+  ( errorCode : Short,
+    topic:      String,
     isInternal: Boolean,
     partitions: Array[PartitionMetaData])
 
-@KafkaResponse
+@KafkaResponsePacket
 case class MetaDataResponse
   ( brokers      : Array[Broker],
     controllerId : Int,

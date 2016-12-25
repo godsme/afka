@@ -1,19 +1,12 @@
 package io.darwin.afka.packets.requests
 
-import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel, _}
-import io.darwin.kafka.macros.KafkaRequest
+import io.darwin.kafka.macros.KafkaRequestPacket
 
 /**
   * Created by darwin on 24/12/2016.
   */
-@KafkaRequest(apiKey = 1, version = 1)
+@KafkaRequestPacket(apiKey = 1, version = 1)
 case class MetaDataRequest
-  ( val topics: Option[Array[String]],val name: Byte )
+  ( val topics: Option[Array[String]] )
 
 
-object MetaDataRequestEncoder extends KafkaEncoder[MetaDataRequest] {
-  override def encode(ch: SinkChannel, o: MetaDataRequest) = {
-    encoding(ch, o.topics)
-    encoding(ch, o.name)
-  }
-}
