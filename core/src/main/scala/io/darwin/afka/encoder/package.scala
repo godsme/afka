@@ -65,6 +65,7 @@ package object encoder {
   implicit object NULL_INT32_ARRAY extends NullableArrayEncoder[Int]
   implicit object NULL_INT64_ARRAY extends NullableArrayEncoder[Long]
 
+  implicit object NULL_STRING extends NullableEncoder[String]((chan, v) => chan.putShort(v.toShort))
   implicit object STRING_ARRAY extends ArrayEncoder[String]
   implicit object NULL_STRING_ARRAY extends NullableArrayEncoder[String]
 

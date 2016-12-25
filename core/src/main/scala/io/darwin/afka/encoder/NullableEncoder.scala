@@ -8,8 +8,12 @@ class NullableEncoder[A]( nullWrite: (SinkChannel, Int) => Unit )
   extends KafkaEncoder[Option[A]] {
 
   override def encode(ch: SinkChannel, o: Option[A]) = {
-    if(o.isEmpty) nullWrite(ch, -1)
-    else en.encode(ch, o.get)
+    if(o.isEmpty) {
+      nullWrite(ch, -1)
+    }
+    else {
+      en.encode(ch, o.get)
+    }
   }
 
 }
