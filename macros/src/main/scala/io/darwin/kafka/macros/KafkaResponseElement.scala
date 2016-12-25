@@ -15,18 +15,14 @@ class KafkaResponseElement extends scala.annotation.StaticAnnotation {
       case Term.Block(
             Seq(cls @ Defn.Class(_, name, _, ctor, _),
             companion: Defn.Object)) => {
-        val r = insertToObject(createDecoders(name, ctor.paramss), cls, companion)
-        println(r.toString())
-        r
+        insertToObject(createDecoders(name, ctor.paramss), cls, companion)
       }
       case cls @ Defn.Class(_, name, _, ctor, _) => {
-        val r = generateCompanion(createDecoders(name, ctor.paramss), cls, name)
-        println(r.toString())
-        r
+        generateCompanion(createDecoders(name, ctor.paramss), cls, name)
       }
       case _ =>
         println(defn.structure)
-        abort("@KafkaRequest should be defined as a case class")
+        abort("@KafkaResponseElement should be defined as a case class")
     }
   }
 }

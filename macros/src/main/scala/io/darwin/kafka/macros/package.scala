@@ -25,10 +25,17 @@ package object macros {
     q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, decoding}"
   }
 
+  def createEncoderImports: Stat = {
+    q"import io.darwin.afka.encoder.{ArrayEncoder, KafkaEncoder, SinkChannel, _}"
+  }
+
   def createDecoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {
-    val args = paramss.map(_.map(param => Term.Arg.Named(
-      Term.Name(param.name.value), Term.Apply(
-        Term.ApplyType(Term.Name("decoding"), Seq(Type.Name(param.decltpe.get.toString))), Seq(Term.Name("chan"))))))
+
+    val args = paramss.map(_.map { param =>
+      arg"""
+            ${Term.Name(param.name.value)} = decoding[${Type.Name(param.decltpe.get.toString)}](${Term.Name("chan")})
+        """
+    })
 
     val decoderName = name.toString + "Decoder"
     q"""
@@ -37,7 +44,7 @@ package object macros {
                ${Ctor.Ref.Name(name.value)}(...$args)
             }
          }
-       """
+     """
   }
 
   def getPatVarTerm(name: String): Pat.Var.Term = {
@@ -46,14 +53,54 @@ package object macros {
 
   def createArrayDecoder(name: Type.Name): Defn.Val = {
     q"""
-       implicit val ${getPatVarTerm("ARRAY_OF_" + name.toString)} = ArrayDecoder.make[${Type.Name(name.toString)}]
+       implicit val ${getPatVarTerm("ARRAY_OF_" + name.toString)} = ArrayDecoder.make[$name]
      """
   }
 
   def createNullArrayDecoder(name: Type.Name): Defn.Val = {
     q"""
-       implicit val ${getPatVarTerm("NULLARRAY_OF_" + name.toString)} = ArrayDecoder.makeNullable[${Type.Name(name.toString)}]
+       implicit val ${getPatVarTerm("NULLARRAY_OF_" + name.toString)} = ArrayDecoder.makeNullable[$name]
      """
+  }
+
+  def getEncodingCode(paramss: Seq[Seq[Term.Param]]): Seq[Term.Apply] = {
+    paramss.flatten.map{ param =>
+      q"encoding(chan, ${Term.Name("o."+param.name.value)})"
+    }
+  }
+
+  def createEncoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {
+    val code = getEncodingCode(paramss)
+
+    val encoderName = name.toString + "Encoder"
+    q"""
+         implicit object ${Term.Name(encoderName)} extends KafkaEncoder[$name] {
+            override def encode(chan: SinkChannel, o: $name) = {
+              ..$code
+            }
+         }
+     """
+  }
+
+  def createArrayEncoder(name: Type.Name): Defn.Object = {
+    q"""
+       implicit object ${Term.Name("ARRAY_OF_" + name.toString)} extends ArrayEncoder[$name]
+     """
+  }
+
+  def createNullArrayEncoder(name: Type.Name): Defn.Object = {
+    q"""
+       implicit object ${Term.Name("NULL_ARRAY_OF_" + name.toString)}  extends NullableArrayEncoder[$name]
+      """
+  }
+
+  def createEncoders(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Seq[Stat]= {
+    val imports = createEncoderImports
+    val encoder = createEncoderObject(name, paramss)
+    val array = createArrayEncoder(name)
+    val nullArray = createNullArrayEncoder(name)
+
+    Seq(q"$imports", q"$encoder", q"$array", q"$nullArray")
   }
 
   def createDecoders(name: Type.Name, paramss: Seq[Seq[Term.Param]]) : Seq[Stat]= {

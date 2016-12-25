@@ -12,7 +12,6 @@ case class Broker
     port   : Int,
     rack   : Option[String])
 
-
 @KafkaResponseElement
 case class PartitionMetaData
   ( errorCode : Short,
@@ -23,8 +22,7 @@ case class PartitionMetaData
 
 @KafkaResponseElement
 case class TopicMetaData
-  ( errorCode : Short,
-    topic:      String,
+  ( errorCode : Short, topic:      String,
     isInternal: Boolean,
     partitions: Array[PartitionMetaData])
 

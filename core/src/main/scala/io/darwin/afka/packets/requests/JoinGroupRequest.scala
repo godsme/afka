@@ -14,19 +14,6 @@ case class GroupProtocol
     metaData: ByteBuffer)
 
 
-object GroupProtocol {
-
-  implicit object GroupProtocolEncoder extends KafkaEncoder[GroupProtocol] {
-    override def encode(ch: SinkChannel, o: GroupProtocol) = {
-      encoding(ch, o.name)
-      encoding(ch, o.metaData)
-    }
-  }
-
-  implicit object ArrayOfGroupProtocolEncoder extends ArrayEncoder[GroupProtocol]
-  implicit object NullableArrayOfGroupProtocolEncoder extends NullableArrayEncoder[GroupProtocol]
-}
-
 @KafkaRequestPacket(apiKey = 11, version = 1)
 case class JoinGroupRequest
   ( groupId:          String,
@@ -34,16 +21,6 @@ case class JoinGroupRequest
     rebalanceTimeout: Int,
     memberId:         String = "",
     protocolType:     String,
-    protocols:        Array[GroupProtocol]) {
+    protocols:        Array[GroupProtocol])
 
-  def encode(chan: SinkChannel, correlationId: Int, clientId: String) {
-      RequestHeader(11, 1, correlationId, clientId).encode(chan)
-      encoding(chan, groupId)
-      encoding(chan, sessionTimeout)
-      encoding(chan, rebalanceTimeout)
-      encoding(chan, memberId)
-      encoding(chan, protocolType)
-      encoding(chan, protocols)
-  }
-}
 

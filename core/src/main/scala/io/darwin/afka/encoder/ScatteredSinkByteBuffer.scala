@@ -12,7 +12,7 @@ class ScatteredSinkByteBuffer(blockSize: Int = 512) extends SinkChannel {
   private var current: ByteBuffer = makeBuffer(4)
   private val buffers = new ListBuffer[ByteBuffer]
 
-  // store the size
+  // used to store the size
   buffers.append(ByteBuffer.allocate(4))
 
   private def makeBuffer(size: Int) = ByteBuffer.allocate(Math.max(size, blockSize))

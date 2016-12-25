@@ -24,7 +24,7 @@ class KafkaResponsePacket extends scala.annotation.StaticAnnotation {
       }
       case _ =>
         println(defn.structure)
-        abort("@KafkaRequest should be defined as a case class")
+        abort("@KafkaResponsePacket should be defined as a case class")
     }
   }
 }
