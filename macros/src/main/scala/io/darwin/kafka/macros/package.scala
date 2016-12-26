@@ -22,7 +22,7 @@ package object macros {
 //  }
 
   def createImports: Stat = {
-    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, decoding}"
+    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, decoding}"
   }
 
   def createEncoderImports: Stat = {
@@ -31,19 +31,27 @@ package object macros {
 
   def createDecoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {
 
+    val method = createDecodeMethod(name, paramss)
+
+    val decoderName = name.toString + "Decoder"
+    q"""
+         implicit object ${Term.Name(decoderName)} extends KafkaDecoder[$name] {
+            $method
+         }
+     """
+  }
+
+  def createDecodeMethod(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Stat = {
     val args = paramss.map(_.map { param =>
       arg"""
             ${Term.Name(param.name.value)} = decoding[${Type.Name(param.decltpe.get.toString)}](${Term.Name("chan")})
         """
     })
 
-    val decoderName = name.toString + "Decoder"
     q"""
-         implicit object ${Term.Name(decoderName)} extends KafkaDecoder[$name] {
-            override def decode(chan: java.nio.ByteBuffer): $name = {
-               ${Ctor.Ref.Name(name.value)}(...$args)
-            }
-         }
+        override def decode(chan: SourceChannel): $name = {
+           ${Ctor.Ref.Name(name.value)}(...$args)
+        }
      """
   }
 
@@ -124,8 +132,22 @@ package object macros {
     Term.Block(Seq(cls, newObj))
   }
 
+  def generateToString(cls: Defn.Class): Defn.Class = {
+    val toString =
+      q"""
+           override val toString: String = {
+           }
+      """
+    cls
+  }
+
   def generateCompanion(stats: Seq[Stat], cls: Defn.Class, name: Type.Name): Term.Block = {
-    val companion   = q"object ${Term.Name(name.value)} { ..$stats }"
+    val companion   =
+      q"""
+        object ${Term.Name(name.value)} {
+          ..$stats
+        }
+      """
     Term.Block(Seq(cls, companion))
   }
 }

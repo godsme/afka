@@ -38,6 +38,8 @@ lazy val core = project.settings(
   libraryDependencies ++= Seq(
     "org.scalameta"  %% "scalameta"    % "1.4.0",
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+    "com.typesafe.akka" %% "akka-actor" % "2.4.16",
+    "com.typesafe.akka" %% "akka-slf4j" % "2.4.16",
     // Test dependencies
     "org.scalatest"                  %% "scalatest" % "3.0.1" % "test",
     "org.scalactic"                  %% "scalactic" % "3.0.1",

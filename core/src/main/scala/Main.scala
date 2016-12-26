@@ -1,8 +1,7 @@
 import java.net.InetSocketAddress
-import java.nio.channels.SocketChannel
 
-import io.darwin.afka.encoder.{ScatteredSinkByteBuffer, encoding}
-import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
+import akka.actor.{ActorSystem, Props}
+import io.darwin.afka.akka.{BootStrap, MetaDataService}
 
 /**
   * Created by darwin on 25/12/2016.
@@ -10,22 +9,14 @@ import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
 object Main extends App {
 
   val host: String = "localhost"
-  val port: Int    = 9092
+  val port: Int = 9092
 
-  var channel = SocketChannel.open(new InetSocketAddress(host, port))
-  println("connected")
+  val system = ActorSystem("push-service")
+  //implicit val ec = system.dispatcher
+  //implicit val materializer = ActorMaterializer()
 
-  var buf = ScatteredSinkByteBuffer()
+  val bootstrp = system.actorOf(Props[BootStrap], "bootstrap")
+  val metaService = system.actorOf(MetaDataService.props(remote = new InetSocketAddress("localhost", 9092), bootstrp), "meta-service")
 
-  val req: KafkaRequest = MetaDataRequest()
 
-  req.encode(buf, 1, "abc")
-
-  val bufs = buf.get
-
-  println(s"write ${channel.write(bufs)}")
-
-  Thread.sleep(1000)
-
-  channel.close()
 }

@@ -9,10 +9,10 @@ import io.darwin.afka.SchemaException
   */
 abstract class WithSizeObjectDecoder[A] extends WithSizeDecoder[A] {
 
-  override def decode(chan: ByteBuffer, size: Int): A = {
+  override def decode(chan: SourceChannel, size: Int): A = {
     if(size < 0) throw SchemaException("size < 0")
     doDecode(chan, size)
   }
 
-  protected def doDecode(chan: ByteBuffer, size: Int): A
+  protected def doDecode(chan: SourceChannel, size: Int): A
 }

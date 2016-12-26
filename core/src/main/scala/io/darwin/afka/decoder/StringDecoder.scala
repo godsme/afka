@@ -9,9 +9,9 @@ object StringDecoder {
 
   implicit object WithSizeStringDecoder extends WithSizeObjectDecoder[String] {
 
-    override def doDecode(chan: ByteBuffer, size: Int): String = {
+    override def doDecode(chan: SourceChannel, size: Int): String = {
       val bytes = new Array[Byte](size)
-      chan.get(bytes)
+      chan.getBytes(bytes)
       new String(bytes, "UTF8")
     }
 

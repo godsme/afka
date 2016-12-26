@@ -13,7 +13,7 @@ object ArrayDecoder {
   private class WithSizeArrayDecoder[A: ClassTag](decoder: KafkaDecoder[A])
     extends WithSizeObjectDecoder[Array[A]] {
 
-    override def doDecode(chan: ByteBuffer, size: Int): Array[A] = {
+    override def doDecode(chan: SourceChannel, size: Int): Array[A] = {
       val r = new Array[A](size)
 
       var i = 0;
