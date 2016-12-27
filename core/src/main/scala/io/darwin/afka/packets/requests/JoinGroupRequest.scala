@@ -10,17 +10,17 @@ import io.darwin.kafka.macros.{KafkaRequestPacket, KafkaRequestElement}
   */
 @KafkaRequestElement
 case class GroupProtocol
-  ( name:     String,
-    metaData: ByteBuffer)
+  ( name:     String = "range",     // "range"/"roundrobin"
+    metaData: ByteBuffer )
 
 
 @KafkaRequestPacket(apiKey = 11, version = 1)
 case class JoinGroupRequest
   ( groupId:          String,
-    sessionTimeout:   Int,
-    rebalanceTimeout: Int,
+    sessionTimeout:   Int = 1000000,
+    rebalanceTimeout: Int = 1000000,
     memberId:         String = "",
-    protocolType:     String,
+    protocolType:     String = "consumer",
     protocols:        Array[GroupProtocol])
 
 

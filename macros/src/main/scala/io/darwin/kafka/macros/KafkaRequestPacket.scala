@@ -55,14 +55,33 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
            }
          """
 
+        val getApiKey =
+          q"""
+             override def apiKey: Short = ${Term.Name(apiKeyValue.toString)}
+           """
+
+        val getVersion =
+          q"""
+             override def version: Short = ${Term.Name(versionValue.toString)}
+           """
+
         val imports = createEncoderImports
 
-        val newStats: Seq[Stat] = Seq(q"$imports", q"$encoding") ++: cls.templ.stats.getOrElse(Nil)
+        val newStats: Seq[Stat] = Seq(q"$getApiKey", q"$getVersion", q"$imports", q"$encoding") ++: cls.templ.stats.getOrElse(Nil)
 
         val newCls = cls.copy(templ = cls.templ.copy(parents=pp, stats = Some(newStats)))
         println(newCls.toString())
 
-        newCls
+        val objApiKey =
+          q"""
+             def apiKey: Short = ${Term.Name(apiKeyValue.toString)}
+           """
+        val objVersion =
+          q"""
+             def version: Short = ${Term.Name(versionValue.toString)}
+           """
+
+        generateCompanion(Seq(q"$objApiKey", q"$objVersion"), newCls, name)
       }
       case _ => throw new Exception("kafka request should be defined as a case class")
     }

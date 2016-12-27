@@ -18,5 +18,7 @@ object Main extends App {
   val bootstrp = system.actorOf(Props[BootStrap], "bootstrap")
   val metaService = system.actorOf(MetaDataService.props(remote = new InetSocketAddress("localhost", 9092), bootstrp), "meta-service")
 
+  Thread.sleep(1000)
 
+  system.terminate()
 }

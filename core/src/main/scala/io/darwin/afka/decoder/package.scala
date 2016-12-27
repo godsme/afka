@@ -1,7 +1,6 @@
 package io.darwin.afka
 
-import java.nio.ByteBuffer
-
+import io.darwin.afka.decoder.ByteBufferDecoder._
 import io.darwin.afka.decoder.StringDecoder._
 
 /**
@@ -12,6 +11,9 @@ package object decoder {
   implicit object STRING extends KafkaStringDecoder[String]
 
   implicit object NULLABLE_STRING extends KafkaStringDecoder[Option[String]]
+
+  implicit val BYTES          = makeBytesDecoder
+  implicit val NULLABLE_BYTES = makeNullableBytesDecoder
 
   implicit object BOOLEAN extends KafkaDecoder[Boolean] {
     override def decode(chan: SourceChannel): Boolean = 0 != chan.getByte

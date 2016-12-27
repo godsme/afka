@@ -26,7 +26,7 @@ package object macros {
   }
 
   def createEncoderImports: Stat = {
-    q"import io.darwin.afka.encoder.{ArrayEncoder, KafkaEncoder, SinkChannel, encoding}"
+    q"import io.darwin.afka.encoder.{ArrayEncoder, NullableArrayEncoder, KafkaEncoder, SinkChannel, encoding}"
   }
 
   def createDecoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {

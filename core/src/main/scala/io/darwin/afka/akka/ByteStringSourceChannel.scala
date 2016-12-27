@@ -16,4 +16,5 @@ case class ByteStringSourceChannel(buf: ByteString)
   override def getInt: Int              = i.getInt
   override def getLong: Long            = i.getLong
   override def getBytes(v: Array[Byte]) = i.getBytes(v)
+  override def getByteString(size: Int): ByteString = i.slice(0, size).toByteString
 }

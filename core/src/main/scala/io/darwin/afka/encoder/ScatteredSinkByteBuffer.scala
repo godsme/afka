@@ -43,6 +43,12 @@ class ScatteredSinkByteBuffer(blockSize: Int = 512) extends SinkChannel {
     }
   }
 
+  def getWithoutSize : Array[ByteBuffer] = {
+    currentDone
+
+    buffers.drop(0).toArray
+  }
+
   def get: Array[ByteBuffer] = {
     currentDone
 
