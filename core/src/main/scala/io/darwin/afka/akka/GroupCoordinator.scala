@@ -1,12 +1,12 @@
 package io.darwin.afka.akka
 
 import java.net.InetSocketAddress
-import java.nio.ByteBuffer
 
-import akka.io.{IO, Tcp}
-import akka.actor.{Actor, ActorRef, FSM}
+import akka.io.Tcp
+import akka.actor.{ActorRef, FSM}
 import akka.util.ByteString
-import io.darwin.afka.packets.requests.{ConsumerGroupReqMeta, GroupProtocol, JoinGroupRequest}
+import io.darwin.afka.packets.common.ConsumerGroupMeta
+import io.darwin.afka.packets.requests.{GroupProtocol, JoinGroupRequest}
 
 import scala.concurrent.duration._
 
@@ -48,13 +48,13 @@ class GroupCoordinator(remote: InetSocketAddress, topics: Array[String], keepAli
   }
 
   private def joinGroup = {
-    def getGroupMeta: ByteBuffer = {
-      val consumerMeta = ConsumerGroupReqMeta(subscription = topics, userData = ByteBuffer.allocate(0))
-      ByteStringSinkChannel().encodeWithoutSize(consumerMeta).toByteBuffer
+    def getGroupMeta: ByteString = {
+      val consumerMeta = ConsumerGroupMeta(subscription = topics, userData = ByteString.empty)
+      ByteStringSinkChannel().encodeWithoutSize(consumerMeta)
     }
 
     def getProtocols: Array[GroupProtocol] = {
-      Array(GroupProtocol(name = "range", metaData = getGroupMeta))
+      Array(GroupProtocol(name = "range", meta = getGroupMeta))
     }
 
     val req = JoinGroupRequest( groupId = "darwin-group", protocols = getProtocols)

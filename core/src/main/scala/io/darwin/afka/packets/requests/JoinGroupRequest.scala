@@ -1,9 +1,7 @@
 package io.darwin.afka.packets.requests
 
-import java.nio.ByteBuffer
-
-import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel, _}
-import io.darwin.kafka.macros.{KafkaRequestPacket, KafkaRequestElement}
+import akka.util.ByteString
+import io.darwin.kafka.macros.{KafkaRequestElement, KafkaRequestPacket}
 
 /**
   * Created by darwin on 24/12/2016.
@@ -11,14 +9,14 @@ import io.darwin.kafka.macros.{KafkaRequestPacket, KafkaRequestElement}
 @KafkaRequestElement
 case class GroupProtocol
   ( name:     String = "range",     // "range"/"roundrobin"
-    metaData: ByteBuffer )
+    meta: ByteString )
 
 
 @KafkaRequestPacket(apiKey = 11, version = 1)
 case class JoinGroupRequest
   ( groupId:          String,
-    sessionTimeout:   Int = 1000000,
-    rebalanceTimeout: Int = 1000000,
+    sessionTimeout:   Int = 10000,
+    rebalanceTimeout: Int = 10000,
     memberId:         String = "",
     protocolType:     String = "consumer",
     protocols:        Array[GroupProtocol])

@@ -36,12 +36,13 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
   class Cache {
     private var cached: Option[ByteString] = None
-    private var size: Option[Int] = None
 
     def buffer(packet: ByteString) = {
       def getCached(packet: ByteString): ByteString = {
         if(cached.isEmpty) packet else cached.get ++ packet
       }
+
+      log.info(s"response received ${packet}")
 
       cached = Some(getCached(packet))
 
@@ -53,12 +54,15 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         if(remain.size == 0) None else Some(remain)
       }
 
-      if(size.isEmpty && cached.get.length >= 4) {
-        size = Some(cached.get.iterator.getInt)
+      def getCachedSize = {
+        if(cached.get.length >= 4) cached.get.iterator.getInt else 0
       }
 
-      if(size.isDefined) {
-        val s = size.get + 4
+      val size = getCachedSize
+
+
+      if(size > 0) {
+        val s = size + 4
         val d = cached.get
 
         if(s <= d.length) {
@@ -67,6 +71,11 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
           if(cached.isDefined) {
             log.info(s"cached size = ${cached.get.length}")
           }
+          else {
+            log.info("cache emptied")
+          }
+        } else {
+          log.info(s"keep caching ${s} ${d.length}")
         }
       }
     }
@@ -76,14 +85,20 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
   private def bufferWriting(packet: ByteString) = {
     unsent :+= packet
+    log.info("buffer writing")
   }
 
-  private def suicide = context stop self
+  private def suicide = {
+    log.info("suicide")
+    context stop self
+  }
 
   case object Ack extends Event
 
   private def acknowledge(conn: ActorRef) = {
     require(!unsent.isEmpty)
+
+    log.info("acknowledge received")
 
     unsent = unsent.drop(1)
 
@@ -97,7 +112,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
   override def receive: Receive = {
     case CommandFailed(_: Connect) =>
-      log.error(s"connecting to ${remote.toString} failed!")
+      log.error(s"${remote.toString} is not reachable.")
       suicide
 
     case c @ Connected(_, _)  =>
@@ -109,7 +124,10 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
       context.become({
         case Received(data) => cached.buffer(data)
         case Ack            => acknowledge(connection)
-        case PeerClosed     => closing = true
+        case PeerClosed     => {
+          closing = true
+          log.info("peer closed")
+        }
         case CommandFailed(Write(data: ByteString, _)) => bufferWriting(data)
         case _: ConnectionClosed => suicide
       }, discardOld = false)

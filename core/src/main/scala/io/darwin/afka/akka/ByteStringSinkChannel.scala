@@ -45,5 +45,5 @@ case class ByteStringSinkChannel() extends SinkChannel {
 
   override def putBytes(v: Array[Byte]) = builder.putBytes(v)
 
-  override def putByteBuffer(v: ByteBuffer) = builder.append(ByteString.fromByteBuffer(v))
+  override def putByteBuffer(v: ByteString) = builder.append(v)
 }

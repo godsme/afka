@@ -1,6 +1,5 @@
 package io.darwin.afka
 
-import java.nio.ByteBuffer
 
 /**
   * Created by darwin on 24/12/2016.
@@ -20,17 +19,6 @@ package object encoder {
       ch.putBytes(bytes)
     }
 
-  }
-
-  implicit object BYTES extends KafkaEncoder[ByteBuffer] {
-    override def encode(ch: SinkChannel, o: ByteBuffer) = {
-      val pos = o.position()
-
-      ch.putInt(o.remaining)
-      ch.putByteBuffer(o)
-
-      o.position(pos)
-    }
   }
 
   implicit object BOOLEAN extends KafkaEncoder[Boolean] {
@@ -69,7 +57,8 @@ package object encoder {
   implicit object STRING_ARRAY extends ArrayEncoder[String]
   implicit object NULL_STRING_ARRAY extends NullableArrayEncoder[String]
 
-  implicit object NULL_BYTES extends NullableEncoder[ByteBuffer]((ch, v) => ch.putInt(v))
+  implicit val BYTES = ByteBufferEncoder.BYTES
+  implicit val NULL_BYTES = ByteBufferEncoder.NULL_BYTES
 
   def encoding[A](ch: SinkChannel, o: A)(implicit encoder: KafkaEncoder[A]) = encoder.encode(ch, o)
 

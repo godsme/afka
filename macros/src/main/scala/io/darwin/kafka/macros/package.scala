@@ -61,13 +61,13 @@ package object macros {
 
   def createArrayDecoder(name: Type.Name): Defn.Val = {
     q"""
-       implicit val ${getPatVarTerm("ARRAY_OF_" + name.toString)} = ArrayDecoder.make[$name]
+       implicit val ${getPatVarTerm("DEC_ARRAY_OF_" + name.toString)} = ArrayDecoder.make[$name]
      """
   }
 
   def createNullArrayDecoder(name: Type.Name): Defn.Val = {
     q"""
-       implicit val ${getPatVarTerm("NULLARRAY_OF_" + name.toString)} = ArrayDecoder.makeNullable[$name]
+       implicit val ${getPatVarTerm("DEC_NULLARRAY_OF_" + name.toString)} = ArrayDecoder.makeNullable[$name]
      """
   }
 
@@ -139,6 +139,20 @@ package object macros {
            }
       """
     cls
+  }
+
+  def createCodecs(name: Type.Name, paramss: Seq[Seq[Term.Param]]) : Seq[Stat] = {
+    val imp = createImports
+    val decoder = createDecoderObject(name, paramss)
+    val arrayDecoder = createArrayDecoder(name)
+    val nullArrayDecoder = createNullArrayDecoder(name)
+
+    val imports = createEncoderImports
+    val encoder = createEncoderObject(name, paramss)
+    val array = createArrayEncoder(name)
+    val nullArray = createNullArrayEncoder(name)
+
+    Seq(q"$imports", q"$encoder", q"$array", q"$nullArray", q"$imp", q"$decoder", q"$arrayDecoder", q"$nullArrayDecoder")
   }
 
   def generateCompanion(stats: Seq[Stat], cls: Defn.Class, name: Type.Name): Term.Block = {

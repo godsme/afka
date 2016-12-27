@@ -37,6 +37,7 @@ package object decoder {
 
   implicit val ARRAY_INT8 = ArrayDecoder.make[Byte]
   implicit val ARRAY_INT32 = ArrayDecoder.make[Int]
+  implicit val ARRAY_STRING = ArrayDecoder.make[String]
 
   def decoding[A](chan: SourceChannel)(implicit decoder: KafkaDecoder[A]): A = {
     decoder.decode(chan)

@@ -21,6 +21,8 @@ abstract class KafkaService(remote: InetSocketAddress, protected val clientId: S
     context watch client
     //log.info(s"client = ${client}")
     preStartMore()
+
+    log.info(context.actorSelection("/*").toString())
   }
 
   private var lastCorrelationId: Int = 0
@@ -50,6 +52,9 @@ abstract class KafkaService(remote: InetSocketAddress, protected val clientId: S
     }
     case KafkaResponseData(data: ByteString) => {
       decodeResponse(data)
+    }
+    case e => {
+      log.error(s"other event received ${e}")
     }
   }
 

@@ -2,7 +2,9 @@ package io.darwin.afka.encoder
 
 import java.nio.{BufferOverflowException, ByteBuffer}
 
-import scala.collection.mutable.{ListBuffer}
+import akka.util.ByteString
+
+import scala.collection.mutable.ListBuffer
 
 /**
   * Created by darwin on 25/12/2016.
@@ -82,7 +84,8 @@ class ScatteredSinkByteBuffer(blockSize: Int = 512) extends SinkChannel {
     }
   }
 
-  override def putByteBuffer(v: ByteBuffer): Unit = {
+  override def putByteBuffer(bs: ByteString): Unit = {
+    val v = bs.toByteBuffer
     val writableSize = current.remaining
     if(v.remaining <= writableSize) {
       current.put(v)

@@ -1,6 +1,6 @@
 package io.darwin.afka.encoder
 
-import java.nio.ByteBuffer
+import akka.util.ByteString
 
 /**
   * Created by darwin on 24/12/2016.
@@ -11,5 +11,5 @@ trait SinkChannel {
   def putInt(v: Int)
   def putLong(v: Long)
   def putBytes(v: Array[Byte])
-  def putByteBuffer(v: ByteBuffer)
+  def putByteBuffer(v: ByteString)
 }
