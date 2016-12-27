@@ -55,7 +55,6 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
       if(size.isEmpty && cached.get.length >= 4) {
         size = Some(cached.get.iterator.getInt)
-        log.info(s"cached size = ${size.get}")
       }
 
       if(size.isDefined) {
@@ -65,7 +64,9 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         if(s <= d.length) {
           owner ! KafkaResponseData(d.slice(4, s))
           cached = getRemain(d.drop(s))
-
+          if(cached.isDefined) {
+            log.info(s"cached size = ${cached.get.length}")
+          }
         }
       }
     }

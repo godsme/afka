@@ -7,6 +7,7 @@ import akka.util.ByteString
 import io.darwin.afka.packets.requests.MetaDataRequest
 import io.darwin.afka.packets.responses.MetaDataResponse
 import io.darwin.afka.decoder.decoding
+import io.darwin.afka.domain.KafkaCluster
 
 
 /**
@@ -23,13 +24,16 @@ class MetaDataService( bootstrap: InetSocketAddress,
   extends KafkaService(bootstrap, "cluster-meta-data") {
 
 
+  private var cluster: Option[KafkaCluster] = None
+
   override def onConnected(conn: ActorRef) = {
     send(MetaDataRequest())
   }
 
   private def decodeMetadataRsp(data: ByteString) = {
-    val rsp = decoding[MetaDataResponse](ByteStringSourceChannel(data))
-    log.info(s"packet: ${data.size} - ${rsp.toString} received")
+    val meta = decoding[MetaDataResponse](ByteStringSourceChannel(data))
+    cluster = Some(KafkaCluster(meta))
+    log.info(s"packet: ${data.size} received\n ${cluster.get}")
   }
 
   override def decodeResponseBody(data: ByteString) = {
