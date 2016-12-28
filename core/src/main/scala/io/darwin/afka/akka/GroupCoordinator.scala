@@ -2,11 +2,10 @@ package io.darwin.afka.akka
 
 import java.net.InetSocketAddress
 
-import akka.io.Tcp
-import akka.actor.{ActorRef, FSM}
-import akka.util.ByteString
+import akka.actor.{ActorRef, FSM, Props, Terminated}
 import io.darwin.afka.packets.common.ConsumerGroupMeta
-import io.darwin.afka.packets.requests.{GroupProtocol, JoinGroupRequest}
+import io.darwin.afka.packets.requests.{GroupProtocol, HeartBeatRequest, JoinGroupRequest}
+import io.darwin.afka.packets.responses.{HeartBeatResponse, JoinGroupResponse}
 
 import scala.concurrent.duration._
 
@@ -15,7 +14,13 @@ import scala.concurrent.duration._
   */
 
 ///////////////////////////////////////////////////////////////////////
-object GroupCoordinator{
+object GroupCoordinator {
+
+  def props( remote: InetSocketAddress,
+             clientId: String = "coord",
+             topics: Array[String] ) = {
+    Props(classOf[GroupCoordinator], remote, clientId, topics)
+  }
 
   sealed trait State
   case object DISCONNECTED extends State
@@ -25,81 +30,87 @@ object GroupCoordinator{
 
   sealed trait Data
   case object Dummy extends Data
+
+  trait Actor extends FSM[State, Data] {
+    this: Actor with KafkaService {
+      val topics: Array[String]
+    } ⇒
+
+    private var memberId: Option[String] = None
+    private var generation: Int = 0
+
+    startWith(CONNECTING, Dummy)
+
+    when(DISCONNECTED, stateTimeout = 60 second) {
+      case Event(StateTimeout, Dummy) ⇒ {
+        goto(CONNECTING)
+      }
+    }
+
+    when(CONNECTING, stateTimeout = 60 second) {
+      case Event(KafkaClientConnected(_), Dummy) ⇒
+        joinGroup
+        goto(JOINING)
+    }
+
+    when(JOINING) {
+      case Event(r: JoinGroupResponse, Dummy) ⇒ {
+        joined(r)
+        goto(JOINED)
+      }
+    }
+
+    when(JOINED, stateTimeout = 10 second) {
+      case Event(StateTimeout, Dummy) ⇒ {
+        heartBeat
+        stay
+      }
+      case Event(rsp:HeartBeatResponse, Dummy) ⇒ {
+        log.info(s"heart beat error=${rsp.error}")
+        stay
+      }
+    }
+
+    private def joinGroup = {
+      val groupMeta = ByteStringSinkChannel().encodeWithoutSize(ConsumerGroupMeta(subscription = topics))
+      send(JoinGroupRequest(groupId="my-group", protocols=Array(GroupProtocol(meta=groupMeta))))
+    }
+
+    private def joined(rsp: JoinGroupResponse) = {
+      log.info(s"error=${rsp.errorCode}, " +
+        s"generation=${rsp.generation}, " +
+        s"proto=${rsp.groupProtocol}, " +
+        s"leader=${rsp.leaderId}, " +
+        s"member=${rsp.memberId}, " +
+        s"members=${rsp.members.mkString(",")}")
+
+      generation = rsp.generation
+      memberId = Some(rsp.memberId)
+    }
+
+    private def heartBeat = {
+      val beat = ByteStringSinkChannel().encodeWithoutSize(ConsumerGroupMeta(subscription = topics))
+      val packet = HeartBeatRequest(groupId="my-group", generation=generation,memberId=memberId.get)
+      send(packet)
+    }
+
+    whenUnhandled {
+      case Event(_: Terminated, Dummy) ⇒
+        goto(DISCONNECTED)
+
+      case Event(_, _) ⇒
+        stay
+    }
+
+    initialize()
+  }
 }
+
 
 ///////////////////////////////////////////////////////////////////////
-class GroupCoordinator(remote: InetSocketAddress, topics: Array[String], keepAlive: Int)
-  extends FSM[GroupCoordinator.State, GroupCoordinator.Data] {
-  import Tcp._
+class GroupCoordinator
+  ( val remote: InetSocketAddress,
+    val clientId: String,
+    val topics: Array[String])
+  extends KafkaActor with GroupCoordinator.Actor with KafkaService
 
-  import GroupCoordinator._
-
-  var requestCorrelation: Int = -1
-  var lastCorrelation: Int = 0
-  var client: ActorRef = _
-  var socket: Option[ActorRef] = None
-
-  private def connect = {
-    client = context.actorOf(KafkaNetworkClient.props(remote = remote, owner = self), "client")
-  }
-
-  override def preStart() = {
-    connect
-  }
-
-  private def joinGroup = {
-    def getGroupMeta: ByteString = {
-      val consumerMeta = ConsumerGroupMeta(subscription = topics, userData = ByteString.empty)
-      ByteStringSinkChannel().encodeWithoutSize(consumerMeta)
-    }
-
-    def getProtocols: Array[GroupProtocol] = {
-      Array(GroupProtocol(name = "range", meta = getGroupMeta))
-    }
-
-    val req = JoinGroupRequest( groupId = "darwin-group", protocols = getProtocols)
-    socket.get ! Write(ByteStringSinkChannel().encode(req, lastCorrelation, ""))
-  }
-
-  private def joined(data: ByteString) {}
-
-  startWith(CONNECTING, Dummy)
-
-  when(DISCONNECTED, stateTimeout = 60 second) {
-    case Event(StateTimeout, Dummy) ⇒ {
-      connect
-      goto(CONNECTING)
-    }
-  }
-
-  when(CONNECTING, stateTimeout = 60 second) {
-    case Event(KafkaClientConnected(conn: ActorRef), Dummy) ⇒
-      socket = Some(conn)
-      joinGroup
-      goto(JOINING)
-  }
-
-  when(JOINING) {
-    case Event(KafkaResponseData(data: ByteString), Dummy) ⇒ {
-      joined(data)
-      goto(JOINED)
-    }
-  }
-
-  when(JOINED, stateTimeout = keepAlive second) {
-    case Event(StateTimeout, Dummy) ⇒ {
-      // send keep alive
-      stay
-    }
-  }
-
-  whenUnhandled {
-    case Event(_: ConnectionClosed, Dummy) ⇒
-      goto(DISCONNECTED)
-
-    case Event(_, _) ⇒
-      stay
-  }
-
-  initialize()
-}

@@ -23,8 +23,17 @@ trait KafkaService extends KafkaActor with ActorLogging {
     val clientId: String
   } ⇒
 
-  private val client = context.actorOf(KafkaNetworkClient.props(remote = remote, owner = self), "client")
-  context watch client
+  private var client: Option[ActorRef] = None
+
+  protected def reconnect = {
+    client = Some(context.actorOf(KafkaNetworkClient.props(remote = remote, owner = self), "client"))
+    context watch client.get
+  }
+
+  override def preStart = {
+    super.preStart
+    reconnect
+  }
 
   private var lastCorrelationId: Int = 0
   protected var lastApiKey = 0
@@ -65,12 +74,21 @@ trait KafkaService extends KafkaActor with ActorLogging {
     }
   }
 
+  private def clientDead = {
+    client = None
+    socket = None
+  }
+
   override def receive: Receive = {
     case c @ KafkaClientConnected(conn: ActorRef) ⇒ {
       socket = Some(conn)
       super.receive(c)
       context become {
         case KafkaResponseData(data: ByteString) ⇒ decodeResponse(data)
+        case t@Terminated(_) ⇒ {
+          clientDead
+          super.receive(t)
+        }
         case e ⇒ super.receive(e)
       }
     }

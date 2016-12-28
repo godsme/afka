@@ -13,12 +13,17 @@ import io.darwin.afka.packets.common.ConsumerGroupMeta
   */
 
 object MetaDataService {
-  def props(remote: InetSocketAddress, listener: ActorRef = null) =
-    Props(classOf[MetaDataService], remote, listener)
 
-  class MetaDataActor
+  def props( remote: InetSocketAddress,
+             clientId: String = "meta-data",
+             listener: ActorRef = null) = {
+    Props(classOf[MetaDataService], remote, clientId, listener)
+  }
+
+
+  class Actor
     extends KafkaActor with ActorLogging {
-    this: MetaDataActor with KafkaService ⇒
+    this: Actor with KafkaService ⇒
 
     private var cluster: Option[KafkaCluster] = None
 
@@ -35,7 +40,7 @@ object MetaDataService {
 
     private def handleMetadataRsp(meta: MetaDataResponse) = {
       cluster = Some(KafkaCluster(meta))
-      log.info(s"meta data response received\n ${cluster.get}")
+      log.info(s"meta data response received\n${cluster.get}")
 
       sendCoordinatorRequest
     }
@@ -51,14 +56,20 @@ object MetaDataService {
     }
 
     private def handleJoinRsp(rsp: JoinGroupResponse) = {
-      log.info(s"error=${rsp.errorCode}, generated-id=${rsp.generatedId}, proto=${rsp.groupProtocol}, leader=${rsp.leaderId}, member=${rsp.memberId}, members=${rsp.members.mkString(",")}")
+      log.info(s"error=${rsp.errorCode}, " +
+        s"generated-id=${rsp.generation}, " +
+        s"proto=${rsp.groupProtocol}, " +
+        s"leader=${rsp.leaderId}, " +
+        s"member=${rsp.memberId}," +
+        s" members=${rsp.members.mkString(",")}")
     }
   }
 }
 
-class MetaDataService(val remote: InetSocketAddress, val listener: ActorRef)
-  extends MetaDataService.MetaDataActor with KafkaService {
-  val clientId: String = "meta-data"
-}
+class MetaDataService
+   ( val remote: InetSocketAddress
+   , val clientId: String
+   , val listener: ActorRef)
+  extends MetaDataService.Actor with KafkaService
 
 
