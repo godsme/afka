@@ -48,6 +48,11 @@ object KafkaTopic {
 ////////////////////////////////////////////////////////////////////
 class KafkaCluster( val brokers : Map[Int, KafkaBroker],
                     val topics  : Map[String, KafkaTopic] ) {
+
+  def getParitionsByTopic(topic: String): Option[Array[KafkaPatition]] = {
+    topics.get(topic).map(_.partions)
+  }
+
   override val toString = {
     s"${brokers.map(_._2.toString).mkString("\n")}\n\n" +
     s"${topics.map(_._2.toString).mkString("\n")}"

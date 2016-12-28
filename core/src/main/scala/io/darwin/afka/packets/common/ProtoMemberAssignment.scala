@@ -7,14 +7,14 @@ import io.darwin.kafka.macros.{KafkaPacketElement}
   * Created by darwin on 27/12/2016.
   */
 @KafkaPacketElement
-case class PartitionAssignment
+case class ProtoPartitionAssignment
 ( topic      : String,
   partitions : Array[Int],
   userData   : ByteString = ByteString.empty)
 
 
 @KafkaPacketElement
-case class MemberAssignment
-( version    : Short,
-  assignment : Array[PartitionAssignment])
+case class ProtoMemberAssignment
+( version    : Short = 0,
+  assignment : Array[ProtoPartitionAssignment])
 

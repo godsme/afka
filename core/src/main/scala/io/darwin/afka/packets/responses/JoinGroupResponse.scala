@@ -15,7 +15,7 @@ case class GroupMember
 @KafkaResponsePacket
 case class JoinGroupResponse
   (errorCode     : Short,
-   generation   : Int,
+   generation    : Int,
    groupProtocol : String,
    leaderId      : String,
    memberId      : String,

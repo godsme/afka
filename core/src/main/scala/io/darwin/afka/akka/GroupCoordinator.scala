@@ -3,7 +3,8 @@ package io.darwin.afka.akka
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props, Terminated}
-import io.darwin.afka.packets.common.ConsumerGroupMeta
+import io.darwin.afka.assignors.RangeAssignor
+import io.darwin.afka.packets.common.ProtoSubscription
 import io.darwin.afka.packets.requests.{GroupProtocol, HeartBeatRequest, JoinGroupRequest}
 import io.darwin.afka.packets.responses.{HeartBeatResponse, JoinGroupResponse}
 
@@ -25,7 +26,8 @@ object GroupCoordinator {
   sealed trait State
   case object DISCONNECTED extends State
   case object CONNECTING   extends State
-  case object JOINING      extends State
+  case object PHASE1       extends State
+  case object PHASE2       extends State
   case object JOINED       extends State
 
   sealed trait Data
@@ -50,13 +52,19 @@ object GroupCoordinator {
     when(CONNECTING, stateTimeout = 60 second) {
       case Event(KafkaClientConnected(_), Dummy) ⇒
         joinGroup
-        goto(JOINING)
+        goto(PHASE1)
     }
 
-    when(JOINING) {
+    when(PHASE1) {
       case Event(r: JoinGroupResponse, Dummy) ⇒ {
         joined(r)
-        goto(JOINED)
+        goto(PHASE2)
+      }
+    }
+
+    when(PHASE2) {
+      case Event(r: JoinGroupResponse, Dummy) ⇒ {
+        stay
       }
     }
 
@@ -71,9 +79,12 @@ object GroupCoordinator {
       }
     }
 
+    val assigner = new RangeAssignor
+
     private def joinGroup = {
-      val groupMeta = ByteStringSinkChannel().encodeWithoutSize(ConsumerGroupMeta(subscription = topics))
-      send(JoinGroupRequest(groupId="my-group", protocols=Array(GroupProtocol(meta=groupMeta))))
+      val groupMeta = ByteStringSinkChannel().encodeWithoutSize(assigner.subscribe(topics))
+      val req = JoinGroupRequest(groupId="my-group", protocols=Array(GroupProtocol(name=assigner.name, meta=groupMeta)))
+      send(req)
     }
 
     private def joined(rsp: JoinGroupResponse) = {
@@ -86,10 +97,14 @@ object GroupCoordinator {
 
       generation = rsp.generation
       memberId = Some(rsp.memberId)
+
+      if(rsp.leaderId == rsp.memberId) {
+
+      }
     }
 
     private def heartBeat = {
-      val beat = ByteStringSinkChannel().encodeWithoutSize(ConsumerGroupMeta(subscription = topics))
+      val beat = ByteStringSinkChannel().encodeWithoutSize(ProtoSubscription(topics = topics))
       val packet = HeartBeatRequest(groupId="my-group", generation=generation,memberId=memberId.get)
       send(packet)
     }

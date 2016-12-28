@@ -8,7 +8,7 @@ import io.darwin.kafka.macros.{KafkaRequestElement, KafkaRequestPacket}
   */
 @KafkaRequestElement
 case class GroupProtocol
-  ( name:     String = "range",     // "range"/"roundrobin"
+  ( name: String,     // "range"/"roundrobin"
     meta: ByteString )
 
 
