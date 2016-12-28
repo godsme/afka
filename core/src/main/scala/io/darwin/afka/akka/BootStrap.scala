@@ -8,7 +8,7 @@ import akka.actor.{Actor, ActorLogging, PoisonPill}
 class BootStrap extends Actor with ActorLogging {
 
   override def receive: Receive = {
-    case m => log.info(s"recv: ${m.toString}")
+    case m ⇒ log.info(s"recv: ${m.toString}")
     //context.stop(self)
     self ! PoisonPill
   }

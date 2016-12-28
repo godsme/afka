@@ -1,7 +1,5 @@
 package io.darwin.afka.akka
 
-import java.nio.ByteBuffer
-
 import akka.util.{ByteString, ByteStringBuilder}
 import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel}
 import io.darwin.afka.packets.requests.KafkaRequest

@@ -66,38 +66,38 @@ class GroupCoordinator(remote: InetSocketAddress, topics: Array[String], keepAli
   startWith(CONNECTING, Dummy)
 
   when(DISCONNECTED, stateTimeout = 60 second) {
-    case Event(StateTimeout, Dummy) => {
+    case Event(StateTimeout, Dummy) ⇒ {
       connect
       goto(CONNECTING)
     }
   }
 
   when(CONNECTING, stateTimeout = 60 second) {
-    case Event(KafkaClientConnected(conn: ActorRef), Dummy)  =>
+    case Event(KafkaClientConnected(conn: ActorRef), Dummy) ⇒
       socket = Some(conn)
       joinGroup
       goto(JOINING)
   }
 
   when(JOINING) {
-    case Event(KafkaResponseData(data: ByteString), Dummy) => {
+    case Event(KafkaResponseData(data: ByteString), Dummy) ⇒ {
       joined(data)
       goto(JOINED)
     }
   }
 
   when(JOINED, stateTimeout = keepAlive second) {
-    case Event(StateTimeout, Dummy) => {
+    case Event(StateTimeout, Dummy) ⇒ {
       // send keep alive
       stay
     }
   }
 
   whenUnhandled {
-    case Event(_: ConnectionClosed, Dummy) =>
+    case Event(_: ConnectionClosed, Dummy) ⇒
       goto(DISCONNECTED)
 
-    case Event(_, _) =>
+    case Event(_, _) ⇒
       stay
   }
 

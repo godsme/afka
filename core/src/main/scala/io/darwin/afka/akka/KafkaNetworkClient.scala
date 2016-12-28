@@ -111,31 +111,28 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
   }
 
   override def receive: Receive = {
-    case CommandFailed(_: Connect) =>
+    case CommandFailed(_: Connect) ⇒
       log.error(s"${remote.toString} is not reachable.")
       suicide
 
-    case c @ Connected(_, _)  =>
+    case Connected(_, _)  ⇒
       log.info(s"connected to ${remote.toString}.")
 
       val connection = sender()
       owner ! KafkaClientConnected(connection)
       sender() ! Register(self, keepOpenOnPeerClosed = true)
       context.become({
-        case Received(data) => cached.buffer(data)
-        case Ack            => acknowledge(connection)
-        case PeerClosed     => {
-          closing = true
-          log.info("peer closed")
-        }
-        case CommandFailed(Write(data: ByteString, _)) => bufferWriting(data)
-        case _: ConnectionClosed => suicide
+        case Received(data) ⇒ cached.buffer(data)
+        case Ack            ⇒ acknowledge(connection)
+        case PeerClosed     ⇒ closing = true
+        case CommandFailed(Write(data: ByteString, _)) ⇒ bufferWriting(data)
+        case _: ConnectionClosed ⇒ suicide
       }, discardOld = false)
 
   }
 
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
-    case e =>
+    case e ⇒
       log.error("Unexpected exception {}", e.getMessage)
       Stop
   }

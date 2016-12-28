@@ -8,12 +8,13 @@ import io.darwin.kafka.macros.{KafkaPacketElement}
   */
 @KafkaPacketElement
 case class PartitionAssignment
-( topic    : String,
-  patition : Int,
-  userData : ByteString = ByteString.empty)
+( topic      : String,
+  partitions : Array[Int],
+  userData   : ByteString = ByteString.empty)
+
 
 @KafkaPacketElement
 case class MemberAssignment
-( version  : Short,
-  partions : Array[PartitionAssignment])
+( version    : Short,
+  assignment : Array[PartitionAssignment])
 
