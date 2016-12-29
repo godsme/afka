@@ -21,35 +21,36 @@ object KafkaBroker {
 }
 
 ////////////////////////////////////////////////////////////////////
-class KafkaPatition( val id      : Int,
+class KafkaPartition(val id      : Int,
                      val leader  : Int,
-                     val replica : Array[Int]) {
+                     val replica : Array[Int],
+                     val isr     : Array[Int]) {
   override val toString = {
-    s"""partition[${id}] = { leader=${leader}, replicas=${replica.mkString(",")} }"""
+    s"""partition[${id}] = { leader=${leader}, replicas=${replica.mkString(",")}, isrs=${isr.mkString(",")} }"""
   }
 }
 
-object KafkaPatition {
-  def apply(p: PartitionMetaData) = new KafkaPatition(p.id, p.leader, p.replicas)
+object KafkaPartition {
+  def apply(p: PartitionMetaData) = new KafkaPartition(p.id, p.leader, p.replicas, p.isr)
 }
 
 ////////////////////////////////////////////////////////////////////
 class KafkaTopic( val id       : String,
-                  val partions : Array[KafkaPatition]) {
+                  val partions : Array[KafkaPartition]) {
   override val toString = {
     s"topic[${id}] = { ${partions.mkString(", ")}"
   }
 }
 
 object KafkaTopic {
-  def apply(v: TopicMetaData) = new KafkaTopic(v.topic, v.partitions.map(KafkaPatition(_)))
+  def apply(v: TopicMetaData) = new KafkaTopic(v.topic, v.partitions.map(KafkaPartition(_)))
 }
 
 ////////////////////////////////////////////////////////////////////
 class KafkaCluster( val brokers : Map[Int, KafkaBroker],
                     val topics  : Map[String, KafkaTopic] ) {
 
-  def getParitionsByTopic(topic: String): Option[Array[KafkaPatition]] = {
+  def getParitionsByTopic(topic: String): Option[Array[KafkaPartition]] = {
     topics.get(topic).map(_.partions)
   }
 

@@ -2,7 +2,7 @@ package io.darwin.afka.akka
 
 import java.net.InetSocketAddress
 
-import akka.actor.{ActorRef, FSM, Props, Terminated}
+import akka.actor.{FSM, Props, Terminated}
 import io.darwin.afka.assignors.RangeAssignor
 import io.darwin.afka.packets.common.ProtoSubscription
 import io.darwin.afka.packets.requests.{GroupProtocol, HeartBeatRequest, JoinGroupRequest}
@@ -33,6 +33,7 @@ object GroupCoordinator {
   sealed trait Data
   case object Dummy extends Data
 
+  private val GROUP_NAME = "my-group"
   trait Actor extends FSM[State, Data] {
     this: Actor with KafkaService {
       val topics: Array[String]
@@ -83,12 +84,13 @@ object GroupCoordinator {
 
     private def joinGroup = {
       val groupMeta = ByteStringSinkChannel().encodeWithoutSize(assigner.subscribe(topics))
-      val req = JoinGroupRequest(groupId="my-group", protocols=Array(GroupProtocol(name=assigner.name, meta=groupMeta)))
+      val req = JoinGroupRequest(groupId=GROUP_NAME, protocols=Array(GroupProtocol(name=assigner.name, meta=groupMeta)))
       send(req)
     }
 
     private def joined(rsp: JoinGroupResponse) = {
-      log.info(s"error=${rsp.errorCode}, " +
+      log.info(
+        s"error=${rsp.errorCode}, " +
         s"generation=${rsp.generation}, " +
         s"proto=${rsp.groupProtocol}, " +
         s"leader=${rsp.leaderId}, " +
@@ -105,7 +107,7 @@ object GroupCoordinator {
 
     private def heartBeat = {
       val beat = ByteStringSinkChannel().encodeWithoutSize(ProtoSubscription(topics = topics))
-      val packet = HeartBeatRequest(groupId="my-group", generation=generation,memberId=memberId.get)
+      val packet = HeartBeatRequest(groupId=GROUP_NAME, generation=generation,memberId=memberId.get)
       send(packet)
     }
 
@@ -126,6 +128,6 @@ object GroupCoordinator {
 class GroupCoordinator
   ( val remote: InetSocketAddress,
     val clientId: String,
-    val topics: Array[String])
+    val topics: Array[String] )
   extends KafkaActor with GroupCoordinator.Actor with KafkaService
 
