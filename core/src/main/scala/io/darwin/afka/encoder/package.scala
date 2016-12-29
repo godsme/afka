@@ -1,6 +1,7 @@
 package io.darwin.afka
 
 import akka.util.ByteString
+import io.darwin.afka.packets.requests.KafkaRequest
 import io.darwin.afka.services.ByteStringSinkChannel
 
 
@@ -67,5 +68,11 @@ package object encoder {
 
   def encode[A](o: A)(implicit encoder: KafkaEncoder[A]): ByteString = {
     ByteStringSinkChannel().encodeWithoutSize(o)
+  }
+
+  def encode[A <: KafkaRequest](o: A, correlation: Int, client: String): ByteString = {
+    val chan = ByteStringSinkChannel()
+    o.encode(chan, correlation, client)
+    chan.get
   }
 }

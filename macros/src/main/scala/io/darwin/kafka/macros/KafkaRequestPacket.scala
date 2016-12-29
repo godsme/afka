@@ -18,34 +18,21 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
     }
 
     defn match {
-      case cls @ Defn.Class(_, name, _, ctor, _) => {
-
-        val parents: Seq[Ctor.Call] = cls.templ.parents
-
-        val newP: Ctor.Call =
-          ctor"""
-           KafkaRequest
-         """
-        val pp = parents.+:(newP)
+      case cls @ Defn.Class(_, name, _, ctor, _) ⇒ {
 
         val q"new $_(..${args})" = this
 
         var thisMap = Map[String, Term.Arg]()
 
-        args.foreach( arg => arg match {
-          case Term.Arg.Named(key, value) => {
+        args.foreach {
+          case Term.Arg.Named(key, value) ⇒
             thisMap += key.toString() -> value
-          }
-        })
+        }
 
         val apiKeyValue:  Term.Arg = thisMap.get("apiKey").getOrElse(abort("no apiKey"))
         val versionValue: Term.Arg = thisMap.get("version").getOrElse(abort("no version"))
 
-        val cons: Term.Apply =
-          q"""
-            ${Ctor.Ref.Name("RequestHeader")}($apiKeyValue, $versionValue, correlationId, clientId).encode(chan)
-          """
-
+        val cons: Term.Apply = q"${Ctor.Ref.Name("RequestHeader")}($apiKeyValue, $versionValue, correlationId, clientId).encode(chan)"
         val applySeq = getEncodingCodes(ctor.paramss).+:(cons)
 
         val encoding =
@@ -55,31 +42,19 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
            }
          """
 
-        val getApiKey =
-          q"""
-             override def apiKey: Short = ${Term.Name(apiKeyValue.toString)}
-           """
-
-        val getVersion =
-          q"""
-             override def version: Short = ${Term.Name(versionValue.toString)}
-           """
+        val getApiKey  = q"override def apiKey: Short = ${Term.Name(apiKeyValue.toString)}"
+        val getVersion = q"override def version: Short = ${Term.Name(versionValue.toString)}"
 
         val imports = createEncoderImports
 
         val newStats: Seq[Stat] = Seq(q"$getApiKey", q"$getVersion", q"$imports", q"$encoding") ++: cls.templ.stats.getOrElse(Nil)
 
-        val newCls = cls.copy(templ = cls.templ.copy(parents=pp, stats = Some(newStats)))
+        val parents = cls.templ.parents.+:(ctor"KafkaRequest")
+        val newCls = cls.copy(templ = cls.templ.copy(parents = parents, stats = Some(newStats)))
         println(newCls.toString())
 
-        val objApiKey =
-          q"""
-             def apiKey: Short = ${Term.Name(apiKeyValue.toString)}
-           """
-        val objVersion =
-          q"""
-             def version: Short = ${Term.Name(versionValue.toString)}
-           """
+        val objApiKey  = q"def apiKey: Short = ${Term.Name(apiKeyValue.toString)}"
+        val objVersion = q"def version: Short = ${Term.Name(versionValue.toString)}"
 
         generateCompanion(Seq(q"$objApiKey", q"$objVersion"), newCls, name)
       }

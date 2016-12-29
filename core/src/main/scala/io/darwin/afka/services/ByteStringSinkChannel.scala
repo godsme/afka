@@ -31,11 +31,6 @@ case class ByteStringSinkChannel() extends SinkChannel {
     get
   }
 
-  def encode(o: KafkaRequest, correlation: Int, clientId: String): ByteString = {
-    o.encode(this, correlation, clientId)
-    get
-  }
-
   override def putByte(v: Byte)         = builder.putByte(v)
   override def putShort(v: Short)       = builder.putShort(v)
   override def putInt(v: Int)           = builder.putInt(v)

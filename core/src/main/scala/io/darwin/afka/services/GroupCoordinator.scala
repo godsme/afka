@@ -3,12 +3,12 @@ package io.darwin.afka.services
 import java.net.InetSocketAddress
 
 import akka.actor.{FSM, Props, Terminated}
-import io.darwin.afka.assignors.PartitionAssignor.{MemberAssignment, MemberSubscription}
+import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
 import io.darwin.afka.domain.KafkaCluster
 import io.darwin.afka.packets.common.{ProtoMemberAssignment, ProtoPartitionAssignment, ProtoSubscription}
 import io.darwin.afka.packets.requests._
-import io.darwin.afka.packets.responses._
+import io.darwin.afka.packets.responses.{SyncGroupResponse, _}
 import io.darwin.afka.decoder.decode
 import io.darwin.afka.encoder.encode
 
@@ -39,16 +39,22 @@ object GroupCoordinator {
   sealed trait Data
   case object Dummy extends Data
 
+
   trait Actor extends FSM[State, Data] {
     this: Actor with KafkaService {
-      //val remote  : InetSocketAddress
       val topics  : Array[String]
       val groupId : String
       val cluster : KafkaCluster
     } ⇒
 
-    private var memberId: Option[String] = None
-    private var generation: Int = 0
+    private var memberId   : Option[String] = None
+    private var generation : Int            = 0
+
+    def suicide(reason: String): State = {
+      log.error(s"suicide: $reason")
+      context stop self
+      stay
+    }
 
     startWith(CONNECTING, Dummy)
 
@@ -59,9 +65,7 @@ object GroupCoordinator {
     }
 
     when(CONNECTING, stateTimeout = 60 second) {
-      case Event(KafkaClientConnected(_), Dummy) ⇒
-        joinGroup
-        goto(PHASE1)
+      case Event(KafkaClientConnected(_), Dummy) ⇒ joinGroup
     }
 
     when(PHASE1) {
@@ -73,14 +77,20 @@ object GroupCoordinator {
 
     when(PHASE2) {
       case Event(r: SyncGroupResponse, Dummy) ⇒ {
-        log.info(s"SyncGroupResponse = ${r.error}")
-        val m = decode[ProtoMemberAssignment](r.assignment)
-        m.assignment.foreach {
-          case ProtoPartitionAssignment(topic, partitions) ⇒
-            log.info(s"${topic}: ${partitions.mkString(",")}")
+        r.error match {
+          case KafkaErrorCode.NO_ERROR ⇒
+            onSync(r)
+            goto(JOINED)
+          case KafkaErrorCode.UNKNOWN_MEMBER_ID |
+               KafkaErrorCode.ILLEGAL_GENERATION |
+               KafkaErrorCode.REBALANCE_IN_PROGRESS ⇒
+            joinGroup
+          // case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒
+          // case KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP ⇒
+          // case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED ⇒
+          case e ⇒
+            suicide(s"SyncGroup failed: ${e}")
         }
-
-        goto(JOINED)
       }
     }
 
@@ -89,22 +99,20 @@ object GroupCoordinator {
         heartBeat
         stay
       }
-      case Event(r:HeartBeatResponse, Dummy) ⇒ {
-        log.info(s"heart beat error=${r.error}")
+      case Event(r: HeartBeatResponse, Dummy) ⇒ {
+        log.info(s"heart beat: code = ${r.error}")
         r.error match {
           case KafkaErrorCode.NO_ERROR ⇒ {
             stay
           }
           case KafkaErrorCode.ILLEGAL_GENERATION |
-               KafkaErrorCode.UNKNOWN_MEMBER_ID |
+               KafkaErrorCode.UNKNOWN_MEMBER_ID  |
                KafkaErrorCode.REBALANCE_IN_PROGRESS ⇒ {
             joinGroup
-            goto(PHASE1)
           }
           case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED |
                KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
-            context stop self
-            stay
+            suicide(s"HearBeat failed: ${r.error}")
           }
         }
       }
@@ -112,15 +120,48 @@ object GroupCoordinator {
 
     val assigner = new RangeAssignor
 
-    private def joinGroup = {
-      val req = JoinGroupRequest(
-        groupId,
-        memberId = memberId.getOrElse(""),
+    private def onSync(r: SyncGroupResponse) = {
+      val m = decode[ProtoMemberAssignment](r.assignment)
+      m.assignment.foreach {
+        case ProtoPartitionAssignment(topic, partitions) ⇒
+          log.info(s"${topic}: ${partitions.mkString(",")}")
+      }
+    }
+
+    private def joinGroup: State = {
+      send(JoinGroupRequest(
+        groupId   = groupId,
+        memberId  = memberId.getOrElse(""),
         protocols = Array(GroupProtocol(
           name = assigner.name,
-          meta = encode(assigner.subscribe(topics)))))
+          meta = encode(assigner.subscribe(topics))))))
 
-      send(req)
+      goto(PHASE1)
+    }
+
+    private def syncAsLeader(rsp: JoinGroupResponse) = {
+      val subscription = rsp.members.get.map {
+        case GroupMember(id, meta) ⇒
+          MemberSubscription(id, decode[ProtoSubscription](meta))
+      }
+
+      val memberAssignment = assigner.assign(cluster, subscription).toArray.map {
+        case (member, assignments) ⇒
+          GroupAssignment(
+            member     = member,
+            assignment = encode(ProtoMemberAssignment(assignment = assignments.toArray)))
+      }
+
+      SyncGroupRequest(groupId, generation, rsp.memberId, memberAssignment)
+    }
+
+    private def syncAsFollower(rsp: JoinGroupResponse) = {
+      SyncGroupRequest(groupId, generation, rsp.memberId)
+    }
+
+    private def sync(rsp: JoinGroupResponse) = {
+      if(rsp.leaderId == rsp.memberId) syncAsLeader(rsp)
+      else syncAsFollower(rsp)
     }
 
     private def joined(rsp: JoinGroupResponse) = {
@@ -135,32 +176,11 @@ object GroupCoordinator {
       generation = rsp.generation
       memberId = Some(rsp.memberId)
 
-      if(rsp.leaderId == rsp.memberId) {
-        val subscription = rsp.members.get.map {
-          case GroupMember(id, meta) ⇒ MemberSubscription(id, decode[ProtoSubscription](meta))
-        }
-
-        val memberAssignment =
-          assigner.assign(cluster, subscription).toArray.map {
-            case (member, assignments) ⇒
-              val assign = encode(ProtoMemberAssignment(assignment = assignments.toArray))
-              GroupAssignment(member, assign)
-          }
-
-        val sync = SyncGroupRequest(groupId, generation, rsp.memberId, memberAssignment)
-        send(sync)
-      }
-      else{
-        val sync = SyncGroupRequest(groupId, generation, rsp.memberId)
-        send(sync)
-      }
+      send(sync(rsp))
     }
 
     private def heartBeat = {
-      val beat   = ByteStringSinkChannel().encodeWithoutSize(ProtoSubscription(topics = topics))
-      val packet = HeartBeatRequest(groupId, generation, memberId.get)
-      log.info(s"heat beat: $groupId $generation ${memberId.get}")
-      send(packet)
+      send(HeartBeatRequest(groupId, generation, memberId.get))
     }
 
     whenUnhandled {

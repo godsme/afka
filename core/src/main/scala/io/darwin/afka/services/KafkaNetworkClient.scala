@@ -58,38 +58,28 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         if(cached.get.length >= 4) cached.get.iterator.getInt else 0
       }
 
-      val size = getCachedSize
-
-
-      if(size > 0) {
+      def trySend(size: Int) = {
         val s = size + 4
         val d = cached.get
 
         if(s <= d.length) {
           owner ! KafkaResponseData(d.slice(4, s))
           cached = getRemain(d.drop(s))
-          if(cached.isDefined) {
-            log.info(s"cached size = ${cached.get.length}")
-          }
-          else {
-            log.info("cache emptied")
-          }
-        } else {
-          log.info(s"keep caching ${s} ${d.length}")
         }
       }
+
+      val size = getCachedSize
+
+      if(size > 0) trySend(size)
     }
   }
 
   private val cached = new Cache()
 
-  private def bufferWriting(packet: ByteString) = {
-    unsent :+= packet
-    log.info("buffer writing")
-  }
+  private def bufferWriting(packet: ByteString) = unsent :+= packet
 
-  private def suicide = {
-    log.info("suicide")
+  private def suicide(reason: String) = {
+    log.info(s"suicide for ${reason}")
     context stop self
   }
 
@@ -98,12 +88,10 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
   private def acknowledge(conn: ActorRef) = {
     require(!unsent.isEmpty)
 
-    log.info("acknowledge received")
-
     unsent = unsent.drop(1)
 
-    if(unsent.isEmpty ) {
-      if(closing) suicide
+    if(unsent.isEmpty) {
+      if(closing) suicide("BUG: data inconsistency")
     }
     else {
       conn ! Write(unsent(0), Ack)
@@ -113,7 +101,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
   override def receive: Receive = {
     case CommandFailed(_: Connect) ⇒
       log.error(s"${remote.toString} is not reachable.")
-      suicide
+      suicide("server unreachable")
 
     case Connected(_, _)  ⇒
       log.info(s"connected to ${remote.toString}.")
@@ -126,7 +114,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         case Ack            ⇒ acknowledge(connection)
         case PeerClosed     ⇒ closing = true
         case CommandFailed(Write(data: ByteString, _)) ⇒ bufferWriting(data)
-        case _: ConnectionClosed ⇒ suicide
+        case _: ConnectionClosed ⇒ suicide("connection lost")
       }, discardOld = false)
 
   }

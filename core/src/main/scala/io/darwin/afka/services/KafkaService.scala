@@ -6,6 +6,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Terminated}
 import akka.io.Tcp.Write
 import akka.util.ByteString
 import io.darwin.afka.decoder.{KafkaDecoder, decode}
+import io.darwin.afka.encoder.{KafkaEncoder, encode}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
 
@@ -41,10 +42,10 @@ trait KafkaService extends KafkaActor with ActorLogging {
 
   private var socket: Option[ActorRef] = None
 
-  protected def send(req: KafkaRequest) = {
+  protected def send[A <: KafkaRequest](req: A) = {
     lastCorrelationId += 1
     lastApiKey = req.apiKey
-    socket.get ! Write(ByteStringSinkChannel().encode(req, lastCorrelationId, clientId))
+    socket.get ! Write(encode(req, lastCorrelationId, clientId))
   }
 
   private def decodeResponseBody(data: ByteString): Unit = {
@@ -55,11 +56,7 @@ trait KafkaService extends KafkaActor with ActorLogging {
     if(lastApiKey      == MetaDataRequest.apiKey) decodeRsp[MetaDataResponse](data)
     else if(lastApiKey == GroupCoordinateRequest.apiKey) decodeRsp[GroupCoordinateResponse](data)
     else if(lastApiKey == HeartBeatRequest.apiKey) decodeRsp[HeartBeatResponse](data)
-    else if(lastApiKey == JoinGroupRequest.apiKey) {
-      log.info("decoding JoinGroupResponse")
-      decodeRsp[JoinGroupResponse](data)
-      log.info("decoding JoinGroupResponse done")
-    }
+    else if(lastApiKey == JoinGroupRequest.apiKey) decodeRsp[JoinGroupResponse](data)
     else if(lastApiKey == SyncGroupRequest.apiKey) decodeRsp[SyncGroupResponse](data)
     else {
       log.warning(s"unknown event ${lastApiKey} received")

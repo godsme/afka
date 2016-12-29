@@ -2,11 +2,10 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import io.darwin.afka.packets.requests._
-import io.darwin.afka.packets.responses.{GroupCoordinateResponse, JoinGroupResponse, KafkaErrorCode, MetaDataResponse}
+import akka.actor.{ActorLogging, ActorRef, Props}
 import io.darwin.afka.domain.KafkaCluster
-import io.darwin.afka.packets.common.ProtoSubscription
+import io.darwin.afka.packets.requests._
+import io.darwin.afka.packets.responses.{GroupCoordinateResponse, KafkaErrorCode, MetaDataResponse}
 
 /**
   * Created by darwin on 26/12/2016.
@@ -67,8 +66,6 @@ object MetaDataService {
         case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED ⇒
           log.warning("Group authorization failed.")
       }
-
-
     }
   }
 }
