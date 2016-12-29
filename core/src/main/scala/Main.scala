@@ -1,7 +1,7 @@
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorSystem, Props}
-import io.darwin.afka.akka.{BootStrap, GroupCoordinator, MetaDataService}
+import io.darwin.afka.services.{BootStrap, GroupCoordinator, MetaDataService}
 
 /**
   * Created by darwin on 25/12/2016.
@@ -14,11 +14,12 @@ object Main extends App {
   val system = ActorSystem("push-service")
 
   val bootstrap = system.actorOf(Props[BootStrap], "bootstrap")
-  val metaService = system.actorOf(
-    MetaDataService.props( remote = new InetSocketAddress(host, port), clientId="darwin"))
-//  val join = system.actorOf(
-//    GroupCoordinator.props( remote = new InetSocketAddress("localhost", 9092),
-//      topics = Array("my-topic", "darwin")),
-//    "coordinator")
+  val metaService = system.actorOf( MetaDataService.props
+      ( remote   = new InetSocketAddress(host, port),
+        clientId = "darwin-client",
+        groupId  = "darwin-group",
+        topics   = Array("darwin7", "darwin8"))
+      , "darwin")
+
 
 }

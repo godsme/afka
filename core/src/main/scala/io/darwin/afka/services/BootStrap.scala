@@ -1,4 +1,4 @@
-package io.darwin.afka.akka
+package io.darwin.afka.services
 
 import akka.actor.{Actor, ActorLogging, PoisonPill}
 

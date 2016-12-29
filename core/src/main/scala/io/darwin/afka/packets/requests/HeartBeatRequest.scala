@@ -8,6 +8,6 @@ import io.darwin.kafka.macros.KafkaRequestPacket
 
 @KafkaRequestPacket(apiKey = 12, version = 0)
 case class HeartBeatRequest
-  ( groupId : String,
-    generation: Int,
-    memberId : String)
+  ( groupId    : String,
+    generation : Int,
+    memberId   : String)

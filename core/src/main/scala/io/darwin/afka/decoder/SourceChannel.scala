@@ -12,4 +12,5 @@ trait SourceChannel {
   def getLong  : Long
   def getBytes(v: Array[Byte])
   def getByteString(size: Int): ByteString
+  def remainSize: Int
 }

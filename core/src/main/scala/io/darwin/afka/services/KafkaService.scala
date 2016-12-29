@@ -1,11 +1,11 @@
-package io.darwin.afka.akka
+package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Terminated}
 import akka.io.Tcp.Write
 import akka.util.ByteString
-import io.darwin.afka.decoder.{KafkaDecoder, decoding}
+import io.darwin.afka.decoder.{KafkaDecoder, decode}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
 
@@ -49,13 +49,17 @@ trait KafkaService extends KafkaActor with ActorLogging {
 
   private def decodeResponseBody(data: ByteString): Unit = {
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      super.receive(decoding[A](ByteStringSourceChannel(data)))
+      super.receive(decode[A](data))
     }
 
     if(lastApiKey      == MetaDataRequest.apiKey) decodeRsp[MetaDataResponse](data)
     else if(lastApiKey == GroupCoordinateRequest.apiKey) decodeRsp[GroupCoordinateResponse](data)
     else if(lastApiKey == HeartBeatRequest.apiKey) decodeRsp[HeartBeatResponse](data)
-    else if(lastApiKey == JoinGroupRequest.apiKey) decodeRsp[JoinGroupResponse](data)
+    else if(lastApiKey == JoinGroupRequest.apiKey) {
+      log.info("decoding JoinGroupResponse")
+      decodeRsp[JoinGroupResponse](data)
+      log.info("decoding JoinGroupResponse done")
+    }
     else if(lastApiKey == SyncGroupRequest.apiKey) decodeRsp[SyncGroupResponse](data)
     else {
       log.warning(s"unknown event ${lastApiKey} received")

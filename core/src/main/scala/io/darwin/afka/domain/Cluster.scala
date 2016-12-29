@@ -12,7 +12,7 @@ import io.darwin.afka.packets.responses.{Broker, MetaDataResponse, PartitionMeta
 class KafkaBroker( val id   : Int,
                    val addr : InetSocketAddress) {
   override val toString = {
-    s"broker[${id}] = { addr=${addr.getHostString}:${addr.getPort}}"
+    s"broker[${id}] = ${addr.getHostString} : ${addr.getPort}"
   }
 }
 
@@ -26,7 +26,7 @@ class KafkaPartition(val id      : Int,
                      val replica : Array[Int],
                      val isr     : Array[Int]) {
   override val toString = {
-    s"""partition[${id}] = { leader=${leader}, replicas=${replica.mkString(",")}, isrs=${isr.mkString(",")} }"""
+    s"""partition[${id}] = { leader=${leader}, replicas=${replica.mkString(",")} }"""
   }
 }
 
@@ -37,9 +37,8 @@ object KafkaPartition {
 ////////////////////////////////////////////////////////////////////
 class KafkaTopic( val id       : String,
                   val partions : Array[KafkaPartition]) {
-  override val toString = {
-    s"topic[${id}] = { ${partions.mkString(", ")}"
-  }
+  override val toString =
+    s"""topic[ ${"%-8s".format(id)} ] = ${partions.mkString(", ")}"""
 }
 
 object KafkaTopic {
@@ -56,7 +55,7 @@ class KafkaCluster( val brokers : Map[Int, KafkaBroker],
 
   override val toString = {
     s"${brokers.map(_._2.toString).mkString("\n")}\n\n" +
-    s"${topics.map(_._2.toString).mkString("\n")}"
+    s"${topics.map (_._2.toString).mkString("\n")}"
   }
 }
 
@@ -66,8 +65,8 @@ object KafkaCluster {
   private def getBrokers(meta: MetaDataResponse) = {
     var nodes: Map[Int, KafkaBroker] = Map.empty
 
-    meta.brokers.foreach { broker =>
-      nodes += broker.nodeId -> KafkaBroker(broker)
+    meta.brokers.foreach { broker ⇒
+      nodes += broker.nodeId → KafkaBroker(broker)
     }
 
     nodes
@@ -77,8 +76,8 @@ object KafkaCluster {
     var topics: Map[String, KafkaTopic] = Map.empty
 
     meta.topics
-      .filter { t => !t.isInternal && t.errorCode == 0 }
-      .foreach{ t => topics += t.topic -> KafkaTopic(t) }
+      .filter { t ⇒ !t.isInternal && t.errorCode == 0 }
+      .foreach{ t ⇒ topics += t.topic → KafkaTopic(t) }
 
     topics
   }

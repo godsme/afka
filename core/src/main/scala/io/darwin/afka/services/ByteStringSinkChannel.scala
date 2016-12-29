@@ -1,4 +1,4 @@
-package io.darwin.afka.akka
+package io.darwin.afka.services
 
 import akka.util.{ByteString, ByteStringBuilder}
 import io.darwin.afka.encoder.{KafkaEncoder, SinkChannel}

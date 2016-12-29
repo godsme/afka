@@ -1,5 +1,8 @@
 package io.darwin.afka
 
+import akka.util.ByteString
+import io.darwin.afka.services.ByteStringSinkChannel
+
 
 /**
   * Created by darwin on 24/12/2016.
@@ -62,4 +65,7 @@ package object encoder {
 
   def encoding[A](ch: SinkChannel, o: A)(implicit encoder: KafkaEncoder[A]) = encoder.encode(ch, o)
 
+  def encode[A](o: A)(implicit encoder: KafkaEncoder[A]): ByteString = {
+    ByteStringSinkChannel().encodeWithoutSize(o)
+  }
 }

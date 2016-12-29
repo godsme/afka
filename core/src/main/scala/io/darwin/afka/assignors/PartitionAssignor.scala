@@ -12,7 +12,7 @@ import scala.collection.mutable
 object PartitionAssignor {
   type Member = String
   type MemberAssignment = scala.collection.mutable.Map[Member, mutable.MutableList[ProtoPartitionAssignment]]
-  case class MemberSubscription(memberId: String, subscriptions: Array[ProtoSubscription])
+  case class MemberSubscription(memberId: String, subscriptions: ProtoSubscription)
 }
 
 trait PartitionAssignor {
@@ -21,5 +21,5 @@ trait PartitionAssignor {
   import io.darwin.afka.assignors.PartitionAssignor._
 
   def subscribe(topics: Array[String]): ProtoSubscription
-  def assign(cluster: KafkaCluster, subscriptions: List[MemberSubscription]): MemberAssignment
+  def assign(cluster: KafkaCluster, subscriptions: Array[MemberSubscription]): MemberAssignment
 }

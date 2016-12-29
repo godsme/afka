@@ -1,7 +1,9 @@
 package io.darwin.afka
 
+import akka.util.ByteString
 import io.darwin.afka.decoder.ByteBufferDecoder._
 import io.darwin.afka.decoder.StringDecoder._
+import io.darwin.afka.services.ByteStringSourceChannel
 
 /**
   * Created by darwin on 24/12/2016.
@@ -42,5 +44,9 @@ package object decoder {
 
   def decoding[A](chan: SourceChannel)(implicit decoder: KafkaDecoder[A]): A = {
     decoder.decode(chan)
+  }
+
+  def decode[A](data: ByteString)(implicit decoder: KafkaDecoder[A]): A = {
+    decoding[A](ByteStringSourceChannel(data))
   }
 }
