@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import io.darwin.afka.packets.requests._
-import io.darwin.afka.packets.responses.{GroupCoordinateResponse, JoinGroupResponse, MetaDataResponse}
+import io.darwin.afka.packets.responses.{GroupCoordinateResponse, JoinGroupResponse, KafkaErrorCode, MetaDataResponse}
 import io.darwin.afka.domain.KafkaCluster
 import io.darwin.afka.packets.common.ProtoSubscription
 
@@ -52,12 +52,23 @@ object MetaDataService {
         s"host   = ${co.coordinator.host}, "   +
         s"port   = ${co.coordinator.port}")
 
-      context.actorOf( GroupCoordinator.
-        props( remote   = new InetSocketAddress(co.coordinator.host, co.coordinator.port),
-               clientId = clientId,
-               groupId  = groupId,
-               cluster  = cluster.get,
-               topics   = topics))
+      co.error match {
+        case KafkaErrorCode.NO_ERROR ⇒
+          context.actorOf( GroupCoordinator.
+            props( remote   = new InetSocketAddress(co.coordinator.host, co.coordinator.port),
+              clientId = clientId,
+              groupId  = groupId,
+              cluster  = cluster.get,
+              topics   = topics))
+
+        case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒
+          log.warning(s"Group ${groupId} coordinator not available.")
+          // start a timer to restart
+        case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED ⇒
+          log.warning("Group authorization failed.")
+      }
+
+
     }
   }
 }

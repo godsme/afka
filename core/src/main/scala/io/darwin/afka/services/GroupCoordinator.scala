@@ -76,7 +76,7 @@ object GroupCoordinator {
         log.info(s"SyncGroupResponse = ${r.error}")
         val m = decode[ProtoMemberAssignment](r.assignment)
         m.assignment.foreach {
-          case ProtoPartitionAssignment(topic, partitions, _) ⇒
+          case ProtoPartitionAssignment(topic, partitions) ⇒
             log.info(s"${topic}: ${partitions.mkString(",")}")
         }
 
