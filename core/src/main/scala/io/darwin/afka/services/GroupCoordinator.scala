@@ -2,7 +2,7 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{FSM, Props, Terminated}
+import akka.actor.{ActorRef, FSM, Props, Terminated}
 import io.darwin.afka.{NodeId, PartitionId, TopicId}
 import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
@@ -46,6 +46,7 @@ object GroupCoordinator {
   trait Actor extends FSM[State, Data] {
     this: Actor with KafkaService {
       val topics  : Array[String]
+      val clientId: String
       val groupId : String
       val cluster : KafkaCluster
     } ⇒
@@ -167,6 +168,8 @@ object GroupCoordinator {
       else syncAsFollower
     }
 
+    private var fetchers: Array[ActorRef] = Array.empty
+
     private def onSync(r: SyncGroupResponse) = {
       val m = decode[ProtoMemberAssignment](r.assignment)
 
@@ -177,7 +180,7 @@ object GroupCoordinator {
       m.assignment.foreach {
         case ProtoPartitionAssignment(topic, partitions) ⇒
           log.info(s"${topic}: ${partitions.mkString(",")}")
-          val partitionMap = cluster.getParitionMapByTopic(topic).getOrElse(Map.empty)
+          val partitionMap = cluster.getPartitionMapByTopic(topic).getOrElse(Map.empty)
 
           partitions.foreach { p ⇒
             routes.getOrElseUpdate(partitionMap(p).leader, mutable.Map.empty)
@@ -186,10 +189,16 @@ object GroupCoordinator {
           }
       }
 
-      routes.toArray.foreach {
+      fetchers = routes.toArray.flatMap {
         case (node, topics) ⇒
-          topics.toArray.map {
-            case (topic, partitions) ⇒ TopicAssignment(topic, partitions.toArray)
+          cluster.getBroker(node).map { remote ⇒
+            context.actorOf(FetchService.props(
+              remote   = remote,
+              clientId = clientId,
+              groupId  = groupId,
+              topics   = topics.toArray.map {
+                case (topic, partitions) ⇒ TopicAssignment(topic, partitions.toArray)
+              }))
           }
       }
 

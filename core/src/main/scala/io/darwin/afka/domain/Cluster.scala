@@ -66,8 +66,12 @@ class KafkaCluster( val brokers : Map[Int, KafkaBroker],
     topics.get(topic).map(_.partitions)
   }
 
-  def getParitionMapByTopic(topic: String): Option[KafkaTopic.PartitionMap] = {
+  def getPartitionMapByTopic(topic: String): Option[KafkaTopic.PartitionMap] = {
     topics.get(topic).map(_.toPartitionMap)
+  }
+
+  def getBroker(id: Int): Option[InetSocketAddress] = {
+    brokers.get(id).map(_.addr)
   }
 
   override val toString = {

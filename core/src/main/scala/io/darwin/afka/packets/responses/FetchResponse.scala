@@ -1,6 +1,6 @@
 package io.darwin.afka.packets.responses
 
-import io.darwin.afka.packets.common.ProtoMessageSet
+import akka.util.ByteString
 import io.darwin.kafka.macros.KafkaResponseElement
 
 /**
@@ -8,19 +8,18 @@ import io.darwin.kafka.macros.KafkaResponseElement
   */
 
 @KafkaResponseElement
-case class FetchParitionResponse
+case class FetchPartitionResponse
   ( partition           : Int,
     error               : Short,
     highWaterMarkOffset : Long,
-    messageSize         : Int,
-    messages            : ProtoMessageSet)
+    messages            : ByteString)
 
 @KafkaResponseElement
 case class FetchTopicResponse
-  ( topic:  String,
-    partitions: Array[FetchParitionResponse])
+  ( topic      : String,
+    partitions : Array[FetchPartitionResponse])
 
 @KafkaResponseElement
 case class FetchResponse
-  ( throttleTime : Int,
+  ( throttleTime : Int = 0,
     topics       : Array[FetchTopicResponse])

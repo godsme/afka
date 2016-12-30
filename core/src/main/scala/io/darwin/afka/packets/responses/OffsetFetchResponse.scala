@@ -9,7 +9,7 @@ import io.darwin.kafka.macros.{KafkaResponseElement, KafkaResponsePacket}
 case class OffsetFetchPartitionResponse
   ( partition : Int,
     offset    : Long,
-    meta      : String,
+    meta      : Option[String],
     error     : Short)
 
 

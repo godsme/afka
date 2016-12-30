@@ -1,26 +1,27 @@
 package io.darwin.afka.packets.requests
 
-import io.darwin.kafka.macros.{KafkaPacketElement, KafkaRequestPacket}
+import io.darwin.kafka.macros.{KafkaPacketElement, KafkaRequestElement, KafkaRequestPacket, KafkaResponseElement}
 
 /**
   * Created by darwin on 29/12/2016.
   */
 
-@KafkaPacketElement
-case class FetchPartionRequest
+@KafkaRequestElement
+case class FetchPartitionRequest
   ( partition   : Int,
     offset      : Long,
-    maxBytes    : Int )
+    maxBytes    : Int  = 64 * 1024)
 
-@KafkaPacketElement
+@KafkaRequestElement
 case class FetchTopicRequest
   ( topic       : String,
-    partitions  : Array[FetchPartionRequest])
+    partitions  : Array[FetchPartitionRequest])
 
 
-@KafkaRequestPacket(apiKey = 1, version = 1)
+@KafkaRequestPacket(apiKey = 1, version = 3)
 case class FetchRequest
-  ( replica     : Int,
-    maxWaitTime : Int,
-    minBytes    : Int,
+  ( replica     : Int = -1,
+    maxWaitTime : Int = 1000,
+    minBytes    : Int = 1, //8 * 1024,
+    maxBytes    : Int = 64 * 1024,
     topics      : Array[FetchTopicRequest])
