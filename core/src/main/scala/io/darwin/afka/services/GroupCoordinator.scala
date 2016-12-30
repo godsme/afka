@@ -3,6 +3,7 @@ package io.darwin.afka.services
 import java.net.InetSocketAddress
 
 import akka.actor.{FSM, Props, Terminated}
+import io.darwin.afka.{NodeId, PartitionId, TopicId}
 import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
 import io.darwin.afka.domain.KafkaCluster
@@ -11,7 +12,9 @@ import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.{SyncGroupResponse, _}
 import io.darwin.afka.decoder.decode
 import io.darwin.afka.encoder.encode
+import io.darwin.afka.services.FetchService.TopicAssignment
 
+import scala.collection.mutable
 import scala.concurrent.duration._
 
 /**
@@ -58,58 +61,47 @@ object GroupCoordinator {
 
     startWith(CONNECTING, Dummy)
 
+
     when(DISCONNECTED, stateTimeout = 60 second) {
-      case Event(StateTimeout, Dummy) ⇒ {
-        goto(CONNECTING)
-      }
+      case Event(StateTimeout, Dummy) ⇒ goto(CONNECTING)
     }
+
 
     when(CONNECTING, stateTimeout = 60 second) {
       case Event(KafkaClientConnected(_), Dummy) ⇒ joinGroup
     }
 
     when(PHASE1) {
-      case Event(r: JoinGroupResponse, Dummy) ⇒ {
-        joined(r)
-        goto(PHASE2)
-      }
+      case Event(r: JoinGroupResponse, Dummy)    ⇒ onJoined(r)
     }
 
     when(PHASE2) {
       case Event(r: SyncGroupResponse, Dummy) ⇒ {
         r.error match {
-          case KafkaErrorCode.NO_ERROR ⇒
-            onSync(r)
-            goto(JOINED)
-          case KafkaErrorCode.UNKNOWN_MEMBER_ID |
+          case KafkaErrorCode.NO_ERROR               ⇒ onSync(r)
+          case KafkaErrorCode.UNKNOWN_MEMBER_ID  |
                KafkaErrorCode.ILLEGAL_GENERATION |
-               KafkaErrorCode.REBALANCE_IN_PROGRESS ⇒
-            joinGroup
+               KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ joinGroup
+
           // case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒
           // case KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP ⇒
           // case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED ⇒
-          case e ⇒
-            suicide(s"SyncGroup failed: ${e}")
+          case e ⇒ suicide(s"SyncGroup failed: ${e}")
         }
       }
     }
 
+
     when(JOINED, stateTimeout = 8 second) {
-      case Event(StateTimeout, Dummy) ⇒ {
-        heartBeat
-        stay
-      }
+      case Event(StateTimeout, Dummy)                 ⇒ heartBeat
       case Event(r: HeartBeatResponse, Dummy) ⇒ {
         log.info(s"heart beat: code = ${r.error}")
         r.error match {
-          case KafkaErrorCode.NO_ERROR ⇒ {
-            stay
-          }
+          case KafkaErrorCode.NO_ERROR                ⇒ stay
           case KafkaErrorCode.ILLEGAL_GENERATION |
                KafkaErrorCode.UNKNOWN_MEMBER_ID  |
-               KafkaErrorCode.REBALANCE_IN_PROGRESS ⇒ {
-            joinGroup
-          }
+               KafkaErrorCode.REBALANCE_IN_PROGRESS   ⇒ joinGroup
+
           case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED |
                KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
             suicide(s"HearBeat failed: ${r.error}")
@@ -118,15 +110,9 @@ object GroupCoordinator {
       }
     }
 
+    /////////////////////////////////////////////////////////////////
     val assigner = new RangeAssignor
 
-    private def onSync(r: SyncGroupResponse) = {
-      val m = decode[ProtoMemberAssignment](r.assignment)
-      m.assignment.foreach {
-        case ProtoPartitionAssignment(topic, partitions) ⇒
-          log.info(s"${topic}: ${partitions.mkString(",")}")
-      }
-    }
 
     private def joinGroup: State = {
       send(JoinGroupRequest(
@@ -139,50 +125,83 @@ object GroupCoordinator {
       goto(PHASE1)
     }
 
-    private def syncAsLeader(rsp: JoinGroupResponse) = {
-      val subscription = rsp.members.get.map {
-        case GroupMember(id, meta) ⇒
-          MemberSubscription(id, decode[ProtoSubscription](meta))
-      }
-
-      val memberAssignment = assigner.assign(cluster, subscription).toArray.map {
-        case (member, assignments) ⇒
-          GroupAssignment(
-            member     = member,
-            assignment = encode(ProtoMemberAssignment(assignment = assignments.toArray)))
-      }
-
-      SyncGroupRequest(groupId, generation, rsp.memberId, memberAssignment)
-    }
-
-    private def syncAsFollower(rsp: JoinGroupResponse) = {
-      SyncGroupRequest(groupId, generation, rsp.memberId)
-    }
-
-    private def sync(rsp: JoinGroupResponse) = {
-      if(rsp.leaderId == rsp.memberId) syncAsLeader(rsp)
-      else syncAsFollower(rsp)
-    }
-
-    private def joined(rsp: JoinGroupResponse) = {
+    private def onJoined(rsp: JoinGroupResponse) = {
       log.info(
         s"error = ${rsp.errorCode}, " +
-        s"generation = ${rsp.generation}, " +
-        s"proto = ${rsp.groupProtocol}, " +
-        s"leader = ${rsp.leaderId}, " +
-        s"member = ${rsp.memberId}, " +
-        s"members = ${rsp.members.getOrElse(Array.empty).mkString(",")}")
+          s"generation = ${rsp.generation}, " +
+          s"proto = ${rsp.groupProtocol}, " +
+          s"leader = ${rsp.leaderId}, " +
+          s"member = ${rsp.memberId}, " +
+          s"members = ${rsp.members.getOrElse(Array.empty).mkString(",")}")
 
       generation = rsp.generation
       memberId = Some(rsp.memberId)
 
       send(sync(rsp))
+
+      goto(PHASE2)
+    }
+
+    private def sync(rsp: JoinGroupResponse) = {
+      def syncAsLeader = {
+        val subscription = rsp.members.get.map {
+          case GroupMember(id, meta) ⇒
+            MemberSubscription(id, decode[ProtoSubscription](meta))
+        }
+
+        val memberAssignment = assigner.assign(cluster, subscription).toArray.map {
+          case (member, assignments) ⇒
+            GroupAssignment(
+              member     = member,
+              assignment = encode(ProtoMemberAssignment(assignment = assignments.toArray)))
+        }
+
+        SyncGroupRequest(groupId, generation, rsp.memberId, memberAssignment)
+      }
+
+      def syncAsFollower = {
+        SyncGroupRequest(groupId, generation, rsp.memberId)
+      }
+
+      if(rsp.leaderId == rsp.memberId) syncAsLeader
+      else syncAsFollower
+    }
+
+    private def onSync(r: SyncGroupResponse) = {
+      val m = decode[ProtoMemberAssignment](r.assignment)
+
+      type TopicMap = mutable.Map[TopicId, mutable.MutableList[PartitionId]]
+
+      val routes: mutable.Map[NodeId, TopicMap] = mutable.Map.empty
+
+      m.assignment.foreach {
+        case ProtoPartitionAssignment(topic, partitions) ⇒
+          log.info(s"${topic}: ${partitions.mkString(",")}")
+          val partitionMap = cluster.getParitionMapByTopic(topic).getOrElse(Map.empty)
+
+          partitions.foreach { p ⇒
+            routes.getOrElseUpdate(partitionMap(p).leader, mutable.Map.empty)
+              .getOrElseUpdate(topic, mutable.MutableList.empty)
+              .+=(p)
+          }
+      }
+
+      routes.toArray.foreach {
+        case (node, topics) ⇒
+          topics.toArray.map {
+            case (topic, partitions) ⇒ TopicAssignment(topic, partitions.toArray)
+          }
+      }
+
+      goto(JOINED)
     }
 
     private def heartBeat = {
       send(HeartBeatRequest(groupId, generation, memberId.get))
+      stay
     }
 
+    ////////////////////////////////////////////////////////////////////
     whenUnhandled {
       case Event(_: Terminated, Dummy) ⇒
         goto(DISCONNECTED)

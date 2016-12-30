@@ -2,6 +2,7 @@ package io.darwin.afka.domain
 
 import java.net.InetSocketAddress
 
+import io.darwin.afka.PartitionId
 import io.darwin.afka.packets.responses.{Broker, MetaDataResponse, PartitionMetaData, TopicMetaData}
 
 /**
@@ -35,22 +36,38 @@ object KafkaPartition {
 }
 
 ////////////////////////////////////////////////////////////////////
-class KafkaTopic( val id       : String,
-                  val partions : Array[KafkaPartition]) {
-  override val toString =
-    s"""topic[ ${"%-8s".format(id)} ] = ${partions.mkString(", ")}"""
-}
-
 object KafkaTopic {
   def apply(v: TopicMetaData) = new KafkaTopic(v.topic, v.partitions.map(KafkaPartition(_)))
+
+  type PartitionMap = Map[PartitionId, KafkaPartition]
 }
+
+class KafkaTopic( val id         : String,
+                  val partitions : Array[KafkaPartition]) {
+  override val toString =
+    s"""topic[ ${"%-8s".format(id)} ] = ${partitions.mkString(", ")}"""
+
+  private var partitionMap: KafkaTopic.PartitionMap = Map.empty
+
+  def toPartitionMap = partitionMap
+
+  partitions.foreach { partition ⇒
+    partitionMap += partition.id → partition
+  }
+}
+
+
 
 ////////////////////////////////////////////////////////////////////
 class KafkaCluster( val brokers : Map[Int, KafkaBroker],
                     val topics  : Map[String, KafkaTopic] ) {
 
-  def getParitionsByTopic(topic: String): Option[Array[KafkaPartition]] = {
-    topics.get(topic).map(_.partions)
+  def getPartitionsByTopic(topic: String): Option[Array[KafkaPartition]] = {
+    topics.get(topic).map(_.partitions)
+  }
+
+  def getParitionMapByTopic(topic: String): Option[KafkaTopic.PartitionMap] = {
+    topics.get(topic).map(_.toPartitionMap)
   }
 
   override val toString = {

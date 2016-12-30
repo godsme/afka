@@ -31,8 +31,10 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
     log.info("connecting ...")
   }
 
+
   private var closing = false
   private var unsent = Vector.empty[ByteString]
+
 
   class Cache {
     private var cached: Option[ByteString] = None
@@ -68,11 +70,12 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         }
       }
 
-      val size = getCachedSize
+      def sending(size: Int) = if(size > 0) trySend(size)
 
-      if(size > 0) trySend(size)
+      sending(getCachedSize)
     }
   }
+
 
   private val cached = new Cache()
 
@@ -100,11 +103,10 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
   override def receive: Receive = {
     case CommandFailed(_: Connect) ⇒
-      log.error(s"${remote.toString} is not reachable.")
-      suicide("server unreachable")
+      suicide(s"server ${remote} unreachable")
 
     case Connected(_, _)  ⇒
-      log.info(s"connected to ${remote.toString}.")
+      log.info(s"connected to ${remote}.")
 
       val connection = sender()
       owner ! KafkaClientConnected(connection)
@@ -114,7 +116,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         case Ack            ⇒ acknowledge(connection)
         case PeerClosed     ⇒ closing = true
         case CommandFailed(Write(data: ByteString, _)) ⇒ bufferWriting(data)
-        case _: ConnectionClosed ⇒ suicide("connection lost")
+        case _: ConnectionClosed ⇒ suicide(s"connection to ${remote} lost")
       }, discardOld = false)
 
   }

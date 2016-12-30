@@ -18,7 +18,7 @@ object Main extends App {
       ( remote   = new InetSocketAddress(host, port),
         clientId = "darwin-client",
         groupId  = "darwin-group",
-        topics   = Array("darwin7", "darwin8"))
+        topics   = Array("godsme-1", "godsme-2"))
       , "darwin")
 
 

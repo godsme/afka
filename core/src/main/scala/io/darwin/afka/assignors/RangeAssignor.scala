@@ -35,12 +35,13 @@ class RangeAssignor extends PartitionAssignor {
     val rMap: MemberAssignment = scala.collection.mutable.Map.empty
 
     map.foreach { case (topic, members) ⇒
-        val numOfPartions: Int = cluster.getParitionsByTopic(topic).fold[Int](0)(_.length)
+      val optPartitions = cluster.getPartitionsByTopic(topic)
+      val numOfPartions: Int = optPartitions.fold[Int](0)(_.length)
         if(numOfPartions > 0) {
           val numOfMember = members.length
           val partitionPerMember = numOfPartions / numOfMember
           var extraParitions = numOfPartions % numOfMember
-          val paritions = cluster.getParitionsByTopic(topic).get
+          val paritions = optPartitions.get.sortBy(_.id)
 
           var n = 0
           members.foreach { member ⇒

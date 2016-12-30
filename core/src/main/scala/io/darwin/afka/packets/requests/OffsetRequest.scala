@@ -21,5 +21,5 @@ case class TopicOffsetRequest
 
 @KafkaRequestPacket(apiKey = 2, version = 0)
 case class OffsetRequest
-  ( replicaId  : Int,
-    offsets    : Array[TopicOffsetRequest])
+  ( replicaId  : Int = -1,
+    topics     : Array[TopicOffsetRequest])

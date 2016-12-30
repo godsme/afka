@@ -2,11 +2,11 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{Actor, ActorLogging, ActorRef, FSM, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
 import akka.io.Tcp.Write
 import akka.util.ByteString
 import io.darwin.afka.decoder.{KafkaDecoder, decode}
-import io.darwin.afka.encoder.{KafkaEncoder, encode}
+import io.darwin.afka.encoder.encode
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
 
@@ -15,7 +15,7 @@ import io.darwin.afka.packets.responses._
   * Created by darwin on 27/12/2016.
   */
 trait KafkaActor extends Actor {
-  override def receive: Receive = {case _ ⇒ throw new Exception("an actor should implemented receive")}
+  override def receive: Receive = { case _ ⇒ throw new Exception("an actor should implemented receive")}
 }
 
 trait KafkaService extends KafkaActor with ActorLogging {
@@ -70,7 +70,8 @@ trait KafkaService extends KafkaActor with ActorLogging {
     if(lastCorrelationId != id) {
       log.error(s"the received correlation id ${id} != ${lastCorrelationId}")
       suicide
-    } else {
+    }
+    else {
       decodeResponseBody(data.slice(4, data.length))
     }
   }
