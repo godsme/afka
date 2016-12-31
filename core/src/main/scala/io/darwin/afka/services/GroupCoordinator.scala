@@ -5,19 +5,17 @@ import java.net.InetSocketAddress
 import akka.actor.FSM.Failure
 import akka.actor.{ActorRef, FSM, Props, Terminated}
 import akka.util.ByteString
-import fastparse.parsers.Terminals.Fail
-import io.darwin.afka.{NodeId, PartitionId, TopicId}
 import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
-import io.darwin.afka.domain.KafkaCluster
+import io.darwin.afka.domain.{FetchedMessages, GroupOffsets, KafkaCluster}
 import io.darwin.afka.packets.common.{ProtoMemberAssignment, ProtoMessageInfo, ProtoPartitionAssignment, ProtoSubscription}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.{SyncGroupResponse, _}
 import io.darwin.afka.decoder.{decode, decoding}
+import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
+import io.darwin.afka.domain.GroupOffsets.{GroupOffsets, PartitionOffsetInfo}
 import io.darwin.afka.encoder.encode
-import io.darwin.afka.services.FetchService.{PartitionMessages, TopicAssignment, TopicMessages}
 
-import scala.collection.mutable
 import scala.collection.mutable.MutableList
 import scala.concurrent.duration._
 
@@ -102,16 +100,18 @@ object GroupCoordinator {
       case Event(msg: FetchResponse, Dummy)            ⇒ onMessageFetched(msg)
       case Event(commit: OffsetCommitResponse, Dummy)  ⇒ onCommitted(commit)
       case Event(r: HeartBeatResponse, Dummy) ⇒ {
-        log.info(s"heart beat: code = ${r.error}")
         r.error match {
           case KafkaErrorCode.NO_ERROR                 ⇒ stay
           case KafkaErrorCode.ILLEGAL_GENERATION |
                KafkaErrorCode.UNKNOWN_MEMBER_ID  |
-               KafkaErrorCode.REBALANCE_IN_PROGRESS    ⇒ joinGroup
+               KafkaErrorCode.REBALANCE_IN_PROGRESS    ⇒ {
+            log.info(s"heart beat: code = ${r.error}")
+            joinGroup
+          }
 
           case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED |
                KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
-            suicide(s"HearBeat failed: ${r.error}")
+            suicide(s"heart beat failed: ${r.error}")
           }
         }
       }
@@ -174,7 +174,13 @@ object GroupCoordinator {
       else syncAsFollower
     }
 
+    var groups: Option[GroupOffsets] = None
+
     private def onSync(r: SyncGroupResponse) = {
+      groups = r.assignment.map {
+        case p ⇒ new GroupOffsets.GroupOffsets(cluster, p.topics)
+      }
+
       def logMsg = {
         r.assignment.get.topics.foreach {
           case ProtoPartitionAssignment(topic, partitions) ⇒
@@ -201,97 +207,100 @@ object GroupCoordinator {
       }
     }
 
-    private def onOffsetFetched(offset: OffsetFetchResponse) = {
-      offset.topics.foreach {
-        case OffsetFetchTopicResponse(topic, partitions) ⇒
-          partitions.filter(_.error != KafkaErrorCode.NO_ERROR).foreach {
-            case OffsetFetchPartitionResponse(part, offset, _, error) ⇒
-              log.info(s"fetch offset error = ${error} on ${part}:${offset}")
+    private def fetchMessages(offsets: OffsetFetchResponse) = {
+
+      def logFailedInfos = {
+        offsets.topics.foreach {
+          case OffsetFetchTopicResponse(topic, partitions) ⇒
+            partitions.filter(_.error != KafkaErrorCode.NO_ERROR).foreach {
+              case OffsetFetchPartitionResponse(part, offset, _, error) ⇒
+                log.info(s"fetch offset error = ${error} on ${topic}: ${part} : ${offset}")
+            }
+        }
+      }
+
+      def fetchingTopics: Array[FetchTopicRequest] = {
+        offsets.topics.map {
+          case OffsetFetchTopicResponse(topic, partitions) ⇒
+            FetchTopicRequest(
+              topic      = topic,
+              partitions = partitions.filter(p ⇒ p.error == KafkaErrorCode.NO_ERROR).map {
+                case OffsetFetchPartitionResponse(partition, offset, _, _) ⇒
+                  FetchPartitionRequest(partition, offset+1)
+              })
+        }
+      }
+
+      def fetchTopics(topics: Array[FetchTopicRequest]) = {
+        def logging = {
+          val s: Array[String] = topics.map { s ⇒
+            s.topic + " : " + s.partitions.map { p ⇒
+              p.partition + ":" + p.offset
+            }.mkString(",")
           }
+
+          log.info(s"send fetch request: ${s.mkString(",")}")
+        }
+
+        if(topics.size > 0) {
+          logging
+          send(FetchRequest(topics = topics))
+        }
       }
 
-      val t: Array[FetchTopicRequest] = offset.topics.map {
-        case OffsetFetchTopicResponse(topic, partitions) ⇒
-          FetchTopicRequest(
-            topic      = topic,
-            partitions = partitions.filter(p ⇒ p.error == KafkaErrorCode.NO_ERROR && p.offset >= 0).map {
-              case OffsetFetchPartitionResponse(partition, offset, _, _) ⇒
-                FetchPartitionRequest(partition, offset)
-            })
+      logFailedInfos
+      fetchTopics(fetchingTopics.filter(_.partitions.size > 0))
+    }
+
+    private def onOffsetFetched(offsets: OffsetFetchResponse) = {
+      groups.foreach(_.update(offsets.topics))
+
+      //fetchMessages(offsets)
+      groups.foreach {
+        case g ⇒ g.toRequests.foreach {
+          case (node, req) ⇒
+            context.actorOf(FetchService.props(
+              remote   = cluster.getBroker(node).get,
+              clientId = clientId,
+              request  = req
+          ), "fetcher-"+node)
+        }
       }
-
-      val r = t.filter(_.partitions.size > 0)
-      if(r.size > 0) {
-        val s: Array[String] = r.map(s ⇒ s.topic + " : " + s.partitions.map(p ⇒ p.partition + ":" + p.offset).mkString(","))
-        log.info(s"send fetch request: ${s.mkString(",")}")
-
-        send(FetchRequest(topics = r))
-      }
-
       stay
     }
 
-    private def onMessageFetched(msg: FetchResponse) = {
-      log.info("fetch response received")
-
-      def decodeMsgs(msgs: ByteString) = {
-        var partitionMsgs = new MutableList[ProtoMessageInfo]
-        val chan = ByteStringSourceChannel(msgs)
-        while(chan.remainSize > 0) {
-          partitionMsgs += decoding[ProtoMessageInfo](chan)
-        }
-
-        partitionMsgs
-      }
-
-      def decodeTopicMsgs(partitions: Array[FetchPartitionResponse]) = {
-        val topicMsgs = new MutableList[PartitionMessages]
-        partitions.foreach {
-          case FetchPartitionResponse(partition, error, wm, msgs) ⇒
-            if(error == KafkaErrorCode.NO_ERROR && msgs.size > 0) {
-              topicMsgs += PartitionMessages(partition, decodeMsgs(msgs))
-            }
-
-        }
-
-        topicMsgs
-      }
-
-      def decodeNodeMsgs = {
-        val nodeMsgs = new MutableList[TopicMessages]
-        msg.topics.foreach {
-          case FetchTopicResponse(topic, partitions) ⇒
-            val topicMsgs = decodeTopicMsgs(partitions)
-            if (topicMsgs.size > 0) {
-              nodeMsgs += TopicMessages(topic, topicMsgs)
-            }
-        }
-
-        nodeMsgs
-      }
-
-      def sendCommit(nodeMsgs: MutableList[TopicMessages]) = {
+    def autoCommit(msgs: MutableList[TopicMessages]) = {
+      def sendCommit = {
         send(OffsetCommitRequest(
           groupId    = groupId,
           generation = generation,
           consumerId = memberId.get,
-          topics     = nodeMsgs.toArray.map {
+          topics     = msgs.toArray.map {
             case TopicMessages(topic, msgs) ⇒
               TopicOffsetCommitRequest(topic, msgs.toArray.map {
                 case PartitionMessages(partition, infos) ⇒
                   log.info(s"commit partition = ${partition}, offset = ${infos.last.offset}")
-                  PartitionOffsetCommitRequest(partition, infos.last.offset+1)
+                  PartitionOffsetCommitRequest(partition, infos.last.offset)
               })
           }))
 
         stay
       }
 
-      def commit(msgs: MutableList[TopicMessages]) = {
-        if(msgs.size > 0) sendCommit(msgs)
-      }
+      if(msgs.size > 0) sendCommit
+    }
 
-      commit(decodeNodeMsgs)
+    private def decodeFetchedMsgs(msg: FetchResponse) = {
+      FetchedMessages.decode(0, msg)
+    }
+
+    private def onMessageFetched(msg: FetchResponse) = {
+      log.info("fetch response received")
+
+      val commits = decodeFetchedMsgs(msg)
+      // handle
+
+      autoCommit(commits.msgs)
 
       stay
     }
@@ -313,6 +322,7 @@ object GroupCoordinator {
       send(HeartBeatRequest(groupId, generation, memberId.get))
       stay
     }
+
 
     ////////////////////////////////////////////////////////////////////
     whenUnhandled {
