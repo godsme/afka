@@ -18,5 +18,8 @@ class NullableEncoder[A]( nullWrite: (SinkChannel, Int) => Unit )
 
 }
 
+class NullableObjectEncoder[A](implicit en: KafkaEncoder[A])
+  extends NullableEncoder[A]((chan, v) ⇒ chan.putInt(v))
+
 class NullableArrayEncoder[A](implicit en: KafkaEncoder[Array[A]] )
-  extends NullableEncoder[Array[A]]((ch, v) => ch.putInt(v))
+  extends NullableObjectEncoder[Array[A]]

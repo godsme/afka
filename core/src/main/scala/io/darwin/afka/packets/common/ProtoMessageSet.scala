@@ -1,5 +1,6 @@
 package io.darwin.afka.packets.common
 
+import akka.util.ByteString
 import io.darwin.kafka.macros.KafkaPacketElement
 
 /**
@@ -17,8 +18,7 @@ case class ProtoMessage
 @KafkaPacketElement
 case class ProtoMessageInfo
   ( offset  : Long,
-    msgSize : Int,
-    msg     : ProtoMessage)
+    msg     : Option[ProtoMessage])
 
 @KafkaPacketElement
 case class ProtoMessageSet

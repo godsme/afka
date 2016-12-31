@@ -53,13 +53,14 @@ trait KafkaService extends KafkaActor with ActorLogging {
       super.receive(decode[A](data))
     }
 
-    if(lastApiKey == GroupCoordinateRequest.apiKey)  decodeRsp[GroupCoordinateResponse](data)
-    else if(lastApiKey == MetaDataRequest.apiKey)    decodeRsp[MetaDataResponse](data)
-    else if(lastApiKey == HeartBeatRequest.apiKey)   decodeRsp[HeartBeatResponse](data)
-    else if(lastApiKey == JoinGroupRequest.apiKey)   decodeRsp[JoinGroupResponse](data)
-    else if(lastApiKey == SyncGroupRequest.apiKey)   decodeRsp[SyncGroupResponse](data)
-    else if(lastApiKey == OffsetFetchRequest.apiKey) decodeRsp[OffsetFetchResponse](data)
-    else if(lastApiKey == FetchRequest.apiKey)       decodeRsp[FetchResponse](data)
+    if(lastApiKey == GroupCoordinateRequest.apiKey)   decodeRsp[GroupCoordinateResponse](data)
+    else if(lastApiKey == MetaDataRequest.apiKey)     decodeRsp[MetaDataResponse](data)
+    else if(lastApiKey == HeartBeatRequest.apiKey)    decodeRsp[HeartBeatResponse](data)
+    else if(lastApiKey == JoinGroupRequest.apiKey)    decodeRsp[JoinGroupResponse](data)
+    else if(lastApiKey == SyncGroupRequest.apiKey)    decodeRsp[SyncGroupResponse](data)
+    else if(lastApiKey == OffsetFetchRequest.apiKey)  decodeRsp[OffsetFetchResponse](data)
+    else if(lastApiKey == FetchRequest.apiKey)        decodeRsp[FetchResponse](data)
+    else if(lastApiKey == OffsetCommitRequest.apiKey) decodeRsp[OffsetCommitResponse](data)
     else {
       log.warning(s"unknown event ${lastApiKey} received")
       super.receive(data)

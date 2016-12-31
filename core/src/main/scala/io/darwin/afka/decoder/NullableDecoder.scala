@@ -10,5 +10,18 @@ class NullableDecoder[A](decoder: WithSizeDecoder[A])
     if(size <= 0) None
     else Some(decoder.decode(chan, size))
   }
+}
 
+object NullableDecoder {
+
+  class SkipSizeDecoder[A](implicit decoder: KafkaDecoder[A])
+    extends WithSizeDecoder[Option[A]]{
+    override def decode(chan: SourceChannel, size: Int): Option[A] = {
+      if(size <= 0) None
+      else Some(decoder.decode(chan))
+    }
+  }
+
+  def make[A](implicit decoder: KafkaDecoder[A]): KafkaDecoder[Option[A]] =
+    new VarSizeDecoder[Option[A]](_.getInt)(new SkipSizeDecoder[A])
 }

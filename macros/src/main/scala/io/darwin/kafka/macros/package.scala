@@ -22,11 +22,11 @@ package object macros {
 //  }
 
   def createImports: Stat = {
-    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, decoding}"
+    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, NullableDecoder, decoding}"
   }
 
   def createEncoderImports: Stat = {
-    q"import io.darwin.afka.encoder.{ArrayEncoder, NullableArrayEncoder, KafkaEncoder, SinkChannel, encoding}"
+    q"import io.darwin.afka.encoder.{ArrayEncoder, NullableArrayEncoder, NullableObjectEncoder, KafkaEncoder, SinkChannel, encoding}"
   }
 
   def createDecoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {
@@ -57,6 +57,12 @@ package object macros {
 
   def getPatVarTerm(name: String): Pat.Var.Term = {
     Pat.Var.Term(Term.Name(name))
+  }
+
+  def createOptionDecoder(name: Type.Name): Defn.Val = {
+    q"""
+       implicit val ${getPatVarTerm("DEC_OPTION_" + name.toString)} = NullableDecoder.make[$name]
+     """
   }
 
   def createArrayDecoder(name: Type.Name): Defn.Val = {
@@ -102,13 +108,20 @@ package object macros {
       """
   }
 
+  def createOptionEncoder(name: Type.Name): Defn.Object = {
+    q"""
+       implicit object ${Term.Name("OPTION_OF_" + name.toString)}  extends NullableObjectEncoder[$name]
+      """
+  }
+
   def createEncoders(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Seq[Stat]= {
     val imports = createEncoderImports
     val encoder = createEncoderObject(name, paramss)
     val array = createArrayEncoder(name)
     val nullArray = createNullArrayEncoder(name)
+    val option = createOptionEncoder(name)
 
-    Seq(q"$imports", q"$encoder", q"$array", q"$nullArray")
+    Seq(q"$imports", q"$encoder", q"$array", q"$nullArray", q"$option")
   }
 
   def createDecoders(name: Type.Name, paramss: Seq[Seq[Term.Param]]) : Seq[Stat]= {
@@ -116,7 +129,8 @@ package object macros {
     val decoder = createDecoderObject(name, paramss)
     val arrayDecoder = createArrayDecoder(name)
     val nullArrayDecoder = createNullArrayDecoder(name)
-    Seq(imp, q"$decoder", q"$arrayDecoder", q"$nullArrayDecoder")
+    val optionDecoder = createOptionDecoder(name)
+    Seq(imp, q"$decoder", q"$arrayDecoder", q"$nullArrayDecoder", q"$optionDecoder")
   }
 
   def createPacketDecoder(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Seq[Stat] = {
@@ -146,13 +160,16 @@ package object macros {
     val decoder = createDecoderObject(name, paramss)
     val arrayDecoder = createArrayDecoder(name)
     val nullArrayDecoder = createNullArrayDecoder(name)
+    val optionDecoder = createOptionDecoder(name)
 
     val imports = createEncoderImports
     val encoder = createEncoderObject(name, paramss)
     val array = createArrayEncoder(name)
     val nullArray = createNullArrayEncoder(name)
+    val option = createOptionEncoder(name)
 
-    Seq(q"$imports", q"$encoder", q"$array", q"$nullArray", q"$imp", q"$decoder", q"$arrayDecoder", q"$nullArrayDecoder")
+    Seq(q"$imports", q"$encoder", q"$array", q"$nullArray", q"$option",
+      q"$imp", q"$decoder", q"$arrayDecoder", q"$nullArrayDecoder", q"$optionDecoder")
   }
 
   def generateCompanion(stats: Seq[Stat], cls: Defn.Class, name: Type.Name): Term.Block = {

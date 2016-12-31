@@ -1,6 +1,6 @@
 package io.darwin.afka.packets.responses
 
-import akka.util.ByteString
+import io.darwin.afka.packets.common.ProtoMemberAssignment
 import io.darwin.kafka.macros.KafkaResponsePacket
 
 /**
@@ -9,4 +9,4 @@ import io.darwin.kafka.macros.KafkaResponsePacket
 @KafkaResponsePacket
 case class SyncGroupResponse
   ( error      : Short,
-    assignment : ByteString)
+    assignment : Option[ProtoMemberAssignment])

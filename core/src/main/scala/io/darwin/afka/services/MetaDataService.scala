@@ -2,7 +2,7 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{ActorLogging, ActorRef, Props}
+import akka.actor.{ActorLogging, ActorRef, Props, Terminated}
 import io.darwin.afka.domain.KafkaCluster
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.{GroupCoordinateResponse, KafkaErrorCode, MetaDataResponse}
@@ -35,6 +35,10 @@ object MetaDataService {
       case KafkaClientConnected(_)        ⇒ send(MetaDataRequest(Some(topics)))
       case meta:  MetaDataResponse        ⇒ handleMetadataRsp(meta)
       case coord: GroupCoordinateResponse ⇒ handleCoordinatorRsp(coord)
+      case term: Terminated ⇒ {
+        log.error(s"actor terminated ${term.actor}")
+        context stop self
+      }
     }
 
     private def handleMetadataRsp(meta: MetaDataResponse) = {

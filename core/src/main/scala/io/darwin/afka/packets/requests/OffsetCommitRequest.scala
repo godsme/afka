@@ -9,7 +9,7 @@ import io.darwin.kafka.macros.{KafkaRequestElement, KafkaRequestPacket}
 case class PartitionOffsetCommitRequest
   ( partition     : Int,
     offset        : Long,
-    meta          : String )
+    meta          : Option[String] = None)
 
 
 @KafkaRequestElement
@@ -20,8 +20,8 @@ case class TopicOffsetCommitRequest
 
 @KafkaRequestPacket( apiKey = 8, version = 2)
 case class OffsetCommitRequest
-  ( consumerGroup : String,
+  ( groupId       : String,
     generation    : Int,
     consumerId    : String,
-    retentionTime : Long,
+    retentionTime : Long = -1,
     topics        : Array[TopicOffsetCommitRequest])

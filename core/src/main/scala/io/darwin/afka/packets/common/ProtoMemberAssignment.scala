@@ -15,6 +15,6 @@ case class ProtoPartitionAssignment
 @KafkaPacketElement
 case class ProtoMemberAssignment
   ( version    : Short = 0,
-    assignment : Array[ProtoPartitionAssignment],
+    topics     : Array[ProtoPartitionAssignment],
     userData   : ByteString = ByteString.empty)
 
