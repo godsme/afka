@@ -28,12 +28,12 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
     import context.system
 
     IO(Tcp) ! Connect(remote, options = Vector(SO.TcpNoDelay(false)))
-    log.info("connecting ...")
+    log.info(s"connecting ${remote}...")
   }
-
 
   private var closing = false
   private var unsent = Vector.empty[ByteString]
+  private var connection: Option[ActorRef] = None
 
 
   class Cache {
@@ -82,13 +82,13 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
   private def bufferWriting(packet: ByteString) = unsent :+= packet
 
   private def suicide(reason: String) = {
-    log.info(s"suicide for ${reason}")
+    log.info(s"suicide: ${reason}")
     context stop self
   }
 
   case object Ack extends Event
 
-  private def acknowledge(conn: ActorRef) = {
+  private def acknowledge = {
     require(!unsent.isEmpty)
 
     unsent = unsent.drop(1)
@@ -97,7 +97,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
       if(closing) suicide("BUG: data inconsistency")
     }
     else {
-      conn ! Write(unsent(0), Ack)
+      connection.get ! Write(unsent(0), Ack)
     }
   }
 
@@ -106,19 +106,32 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
       suicide(s"server ${remote} unreachable")
 
     case Connected(_, _)  ⇒
-      log.info(s"connected to ${remote}.")
+      log.info(s"connected to ${remote}. ${sender().path.toString}")
 
-      val connection = sender()
-      owner ! KafkaClientConnected(connection)
+      val connection = Some(sender())
+      owner ! KafkaClientConnected(connection.get)
       sender() ! Register(self, keepOpenOnPeerClosed = true)
       context.become({
         case Received(data) ⇒ cached.buffer(data)
-        case Ack            ⇒ acknowledge(connection)
+        case Ack            ⇒ acknowledge
         case PeerClosed     ⇒ closing = true
         case CommandFailed(Write(data: ByteString, _)) ⇒ bufferWriting(data)
         case _: ConnectionClosed ⇒ suicide(s"connection to ${remote} lost")
       }, discardOld = false)
 
+  }
+
+  private def closeConnection = {
+    connection.foreach { c ⇒
+      log.info(s"close connection ${c}")
+    }
+
+    connection.map(_ ! Close)
+    connection = None
+  }
+
+  override def postStop() = {
+    closeConnection
   }
 
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {

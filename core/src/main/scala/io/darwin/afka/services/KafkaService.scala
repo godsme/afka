@@ -27,6 +27,7 @@ trait KafkaService extends KafkaActor with ActorLogging {
   private var client: Option[ActorRef] = None
 
   protected def reconnect = {
+    closeConnection
     client = Some(context.actorOf(KafkaNetworkClient.props(remote = remote, owner = self), "client"))
     context watch client.get
   }
@@ -98,5 +99,10 @@ trait KafkaService extends KafkaActor with ActorLogging {
       }
     }
     case e ⇒ super.receive(e)
+  }
+
+  def closeConnection = {
+    client.map(context.stop(_))
+    clientDead
   }
 }

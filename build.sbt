@@ -40,10 +40,17 @@ lazy val core = project.settings(
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     "com.typesafe.akka" %% "akka-actor" % "2.4.16",
     "com.typesafe.akka" %% "akka-slf4j" % "2.4.16",
+    "com.typesafe.akka" %% "akka-http-core" % "10.0.1",
+    "com.typesafe.akka" %% "akka-http" % "10.0.1",
+    "com.typesafe.akka" %% "akka-http-testkit" % "10.0.1",
+    "com.typesafe.akka" %% "akka-http-spray-json" % "10.0.1",
+    "com.typesafe.akka" %% "akka-http-jackson" % "10.0.1",
+    "com.typesafe.akka" %% "akka-http-xml" % "10.0.1",
     // Test dependencies
     "org.scalatest"                  %% "scalatest" % "3.0.1" % "test",
     "org.scalactic"                  %% "scalactic" % "3.0.1",
-    "com.googlecode.java-diff-utils" % "diffutils"  % "1.3.0" % "test"
+    "com.googlecode.java-diff-utils" % "diffutils"  % "1.3.0" % "test",
+    "com.typesafe.akka" %% "akka-testkit" % "2.4.16"
   )
 ).dependsOn(macros)
 

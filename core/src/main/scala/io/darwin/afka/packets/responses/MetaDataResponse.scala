@@ -15,7 +15,8 @@ case class Broker
 @KafkaResponseElement
 case class PartitionMetaData
   ( errorCode : Short,
-    id        : Int, leader    : Int,
+    id        : Int,
+    leader    : Int,
     replicas  : Array[Int],
     isr       : Array[Int])
 
@@ -31,6 +32,7 @@ case class TopicMetaData
 @KafkaResponsePacket
 case class MetaDataResponse
   ( brokers      : Array[Broker],
+    clusterId    : Option[String],
     controllerId : Int,
     topics       : Array[TopicMetaData])
 

@@ -3,15 +3,9 @@ package io.darwin.afka.services
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorLogging, Props}
-import akka.util.ByteString
-import io.darwin.afka.PartitionId
+import io.darwin.afka.domain.FetchedMessages
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
-import io.darwin.afka.decoder.decoding
-import io.darwin.afka.domain.FetchedMessages
-import io.darwin.afka.packets.common.ProtoMessageInfo
-
-import scala.collection.mutable.MutableList
 
 
 /**
@@ -24,7 +18,6 @@ object FetchService {
              request    : FetchRequest ) = {
     Props(classOf[FetchService], remote, clientId, request)
   }
-
 
 
   trait Actor extends KafkaActor with ActorLogging {
