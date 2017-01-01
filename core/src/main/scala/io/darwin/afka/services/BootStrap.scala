@@ -3,8 +3,8 @@ package io.darwin.afka.services
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props, Terminated}
-import io.darwin.afka.packets.requests.{FetchRequest, MetaDataRequest}
-import io.darwin.afka.packets.responses.{Broker, MetaDataResponse}
+import io.darwin.afka.packets.requests.MetaDataRequest
+import io.darwin.afka.packets.responses.{BrokerResponse, MetaDataResponse}
 
 import scala.concurrent.duration._
 
@@ -51,7 +51,7 @@ object BootStrap {
     }
 
     when(BOOTSTRAP, stateTimeout = 5 second) {
-      case Event(meta: MetaDataResponse, _) ⇒ {
+      case Event(ResponsePacket(meta: MetaDataResponse, _), _) ⇒ {
         onMetaResponse(meta)
       }
       case Event(StateTimeout, Fetch) ⇒ {
@@ -64,7 +64,7 @@ object BootStrap {
       def logging = {
         log.info(s"cluster: ${meta.clusterId.getOrElse("")}, controller: ${meta.controllerId}")
         meta.brokers.foreach {
-          case Broker(node, host, port, rack) ⇒
+          case BrokerResponse(node, host, port, rack) ⇒
             log.info(s"broker = { node: ${node}, host: ${host}, port: ${port} }")
         }
       }

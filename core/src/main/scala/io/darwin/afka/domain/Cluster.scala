@@ -3,7 +3,7 @@ package io.darwin.afka.domain
 import java.net.InetSocketAddress
 
 import io.darwin.afka.PartitionId
-import io.darwin.afka.packets.responses.{Broker, MetaDataResponse, PartitionMetaData, TopicMetaData}
+import io.darwin.afka.packets.responses.{BrokerResponse, MetaDataResponse, PartitionMetaData, TopicMetaData}
 
 /**
   * Created by darwin on 27/12/2016.
@@ -18,7 +18,7 @@ class KafkaBroker( val id   : Int,
 }
 
 object KafkaBroker {
-  def apply(broker: Broker) = new KafkaBroker(broker.nodeId, new InetSocketAddress(broker.host, broker.port))
+  def apply(broker: BrokerResponse) = new KafkaBroker(broker.nodeId, new InetSocketAddress(broker.host, broker.port))
 }
 
 ////////////////////////////////////////////////////////////////////

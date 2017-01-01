@@ -6,7 +6,7 @@ import io.darwin.kafka.macros.{KafkaResponsePacket, KafkaResponseElement}
   * Created by darwin on 24/12/2016.
   */
 @KafkaResponseElement
-case class Broker
+case class BrokerResponse
   ( nodeId : Int,
     host   : String,
     port   : Int,
@@ -31,8 +31,8 @@ case class TopicMetaData
 
 @KafkaResponsePacket
 case class MetaDataResponse
-  ( brokers      : Array[Broker],
-    clusterId    : Option[String],
-    controllerId : Int,
-    topics       : Array[TopicMetaData])
+  (brokers      : Array[BrokerResponse],
+   clusterId    : Option[String],
+   controllerId : Int,
+   topics       : Array[TopicMetaData])
 

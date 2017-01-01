@@ -2,9 +2,10 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.FSM.Event
-import akka.actor.{ActorRef, FSM, Props}
+import akka.actor.{ActorRef, ActorSelection, FSM, Props, Terminated}
+import io.darwin.afka.TopicId
 import io.darwin.afka.packets.responses.MetaDataResponse
+import io.darwin.afka.services.BrokerMaster.BrokerRequest
 
 /**
   * Created by darwin on 1/1/2017.
@@ -12,8 +13,9 @@ import io.darwin.afka.packets.responses.MetaDataResponse
 object ClusterService {
 
   def props( clusterId  : String,
-             bootstraps : Array[InetSocketAddress]) = {
-    Props(classOf[ClusterService], clusterId, bootstraps)
+             bootstraps : Array[InetSocketAddress],
+             listener   : ActorRef) = {
+    Props(classOf[ClusterService], clusterId, bootstraps, listener)
   }
 
   sealed trait State
@@ -22,13 +24,17 @@ object ClusterService {
 
   sealed trait Data
   case object Dummy extends Data
+
+  case class CreateConsumer(groupId: String, topics: Array[TopicId])
+  case class ClusterReady()
 }
 
 
-import ClusterService._
+import io.darwin.afka.services.ClusterService._
 
 class ClusterService(val clusterId  : String,
-                     val bootstraps : Array[InetSocketAddress])
+                     val bootstraps : Array[InetSocketAddress],
+                     val listener   : ActorRef)
   extends FSM[State, Data]
 {
   var workers = bootstraps.map { host ⇒
@@ -47,14 +53,36 @@ class ClusterService(val clusterId  : String,
   }
 
   when(READY) {
-    case _ ⇒ stay
+    case Event(e: MetaDataResponse, Dummy) ⇒ stay
   }
+
+  var brokers: Option[ActorRef] = None
 
   def onMetaReceived(meta: MetaDataResponse) = {
     log.info("meta data")
     workers.foreach(context.stop)
 
+    brokers = Some(context.actorOf(BrokerService.props(
+          brokers  = meta.brokers,
+          clientId = "push-service",
+          listener = self),
+      "broker-service"))
+
+    listener ! ClusterReady()
+
     goto(READY)
+  }
+
+  whenUnhandled {
+    case Event(e: CreateConsumer, _) ⇒ {
+      if (brokers.isDefined) {
+        log.info("create consumer")
+        brokers.get.forward(BrokerRequest(e))
+      } else {
+        log.warning("not ready yet")
+      }
+      stay
+    }
   }
 }
 

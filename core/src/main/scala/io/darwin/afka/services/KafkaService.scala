@@ -9,7 +9,10 @@ import io.darwin.afka.decoder.{KafkaDecoder, decode}
 import io.darwin.afka.encoder.encode
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
+import scala.collection.mutable.Map
 
+case class RequestPacket(request: KafkaRequest, who: ActorRef)
+case class ResponsePacket(response: Any, who: ActorRef)
 
 /**
   * Created by darwin on 27/12/2016.
@@ -38,45 +41,49 @@ trait KafkaService extends KafkaActor with ActorLogging {
   }
 
   private var lastCorrelationId: Int = 0
-  protected var lastApiKey = 0
   protected def suicide = context stop self
 
   private var socket: Option[ActorRef] = None
 
-  protected def send[A <: KafkaRequest](req: A) = {
+  private var pendingRequests: Map[Int,  RequestPacket] = Map.empty
+
+  protected def send[A <: KafkaRequest](req: A, who: ActorRef = self) = {
     lastCorrelationId += 1
-    lastApiKey = req.apiKey
     socket.get ! Write(encode(req, lastCorrelationId, clientId))
+    pendingRequests += lastCorrelationId → RequestPacket(req, who)
   }
 
-  private def decodeResponseBody(data: ByteString): Unit = {
+  private def decodeResponseBody(apiKey: Int, who: ActorRef, data: ByteString): Unit = {
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      super.receive(decode[A](data))
+      super.receive(ResponsePacket(decode[A](data), who))
     }
 
-    if(lastApiKey == GroupCoordinateRequest.apiKey)   decodeRsp[GroupCoordinateResponse](data)
-    else if(lastApiKey == MetaDataRequest.apiKey)     decodeRsp[MetaDataResponse](data)
-    else if(lastApiKey == HeartBeatRequest.apiKey)    decodeRsp[HeartBeatResponse](data)
-    else if(lastApiKey == JoinGroupRequest.apiKey)    decodeRsp[JoinGroupResponse](data)
-    else if(lastApiKey == SyncGroupRequest.apiKey)    decodeRsp[SyncGroupResponse](data)
-    else if(lastApiKey == OffsetFetchRequest.apiKey)  decodeRsp[OffsetFetchResponse](data)
-    else if(lastApiKey == FetchRequest.apiKey)        decodeRsp[FetchResponse](data)
-    else if(lastApiKey == OffsetCommitRequest.apiKey) decodeRsp[OffsetCommitResponse](data)
+    if(apiKey == GroupCoordinateRequest.apiKey)   decodeRsp[GroupCoordinateResponse](data)
+    else if(apiKey == MetaDataRequest.apiKey)     decodeRsp[MetaDataResponse](data)
+    else if(apiKey == HeartBeatRequest.apiKey)    decodeRsp[HeartBeatResponse](data)
+    else if(apiKey == JoinGroupRequest.apiKey)    decodeRsp[JoinGroupResponse](data)
+    else if(apiKey == SyncGroupRequest.apiKey)    decodeRsp[SyncGroupResponse](data)
+    else if(apiKey == OffsetFetchRequest.apiKey)  decodeRsp[OffsetFetchResponse](data)
+    else if(apiKey == FetchRequest.apiKey)        decodeRsp[FetchResponse](data)
+    else if(apiKey == OffsetCommitRequest.apiKey) decodeRsp[OffsetCommitResponse](data)
     else {
-      log.warning(s"unknown event ${lastApiKey} received")
+      log.warning(s"unknown event ${apiKey} received")
       super.receive(data)
     }
   }
 
   private def decodeResponse(data: ByteString) = {
     val id = data.iterator.getInt
+    val req = pendingRequests.get(id)
 
-    if(lastCorrelationId != id) {
+    if(req.isEmpty) {
       log.error(s"the received correlation id ${id} != ${lastCorrelationId}")
       suicide
     }
     else {
-      decodeResponseBody(data.slice(4, data.length))
+      pendingRequests -= id
+      val r = req.get
+      decodeResponseBody(r.request.apiKey, r.who, data.slice(4, data.length))
     }
   }
 
