@@ -39,7 +39,7 @@ class BootStrapService
   startWith(INIT, Dummy)
 
   when(INIT) {
-    case Event(_:WorkerReady, _) ⇒ {
+    case Event(WorkerOnline, _) ⇒ {
       send(MetaDataRequest())
       goto(BOOTSTRAP)
     }

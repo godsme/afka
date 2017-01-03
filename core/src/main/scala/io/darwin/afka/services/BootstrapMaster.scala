@@ -21,12 +21,11 @@ class BootstrapMaster(val bootstraps : Array[InetSocketAddress],
   def numOfWorkers: Int = bootstraps.length
   def routingLogic: RoutingLogic = RandomRoutingLogic()
 
-  def createWorker(i: Int): ActorRef = {
-    context.actorOf(BrokerConnection.props(
+  def createWorker(i: Int) = {
+    (i, BrokerConnection.props(
         remote   = bootstraps(i),
         clientId = "bootstrap",
-        listener = self),
-      i.toString)
+        listener = self))
   }
 
   def reportStrategy: RouterReadyReportStrategy = ReportOnFirstWorkerReady

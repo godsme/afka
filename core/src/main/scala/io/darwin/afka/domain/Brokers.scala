@@ -31,7 +31,7 @@ object Broker {
 class Brokers(b: Array[BrokerResponse]) {
 
   val length = b.length
-  private val brokers: Array[Broker] = b.sortBy(_.nodeId).map(Broker(_))
+  val brokers: Array[Broker] = b.sortBy(_.nodeId).map(Broker(_))
 
   val map: Map[Int, Broker] = brokers.map(b ⇒ (b.nodeId, b)).toMap
 
@@ -46,6 +46,14 @@ class Brokers(b: Array[BrokerResponse]) {
   }
 
   def apply(i: Int): Broker = brokers(i)
+
+  def get(node: Int): Option[Broker] = {
+    map.get(node)
+  }
+
+  def byIndex(i: Int): Broker = {
+    brokers(i)
+  }
 }
 
 object Brokers {

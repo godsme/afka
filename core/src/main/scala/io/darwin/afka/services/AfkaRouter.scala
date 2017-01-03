@@ -1,11 +1,13 @@
 package io.darwin.afka.services
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
 import akka.routing.{Router, RoutingLogic}
 
 import scala.collection.mutable.Map
 
-case class WorkerReady(who: ActorRef)
+case object WorkerOnline
+case class WorkerOffline(cause: String)
+
 case class NotReady(any: Any)
 case class RoutingEvent(event: Any)
 
@@ -21,7 +23,7 @@ trait AfkaRouter extends Actor with ActorLogging {
   this: {
     def numOfWorkers: Int
     def routingLogic: RoutingLogic
-    def createWorker(i: Int): ActorRef
+    def createWorker(i: Int): (Int, Props)
     def reportStrategy: RouterReadyReportStrategy
     val listener: ActorRef
   } ⇒
@@ -31,18 +33,46 @@ trait AfkaRouter extends Actor with ActorLogging {
 
   def init = {
     for(i ← 0 until numOfWorkers) {
-      val r = createWorker(i)
-      workers += i → (r, false)
+      addWorker(i)
+    }
+  }
+
+  def addWorker(i: Int): Unit = {
+    val (n, p) = createWorker(i)
+    val r = context.actorOf(p, n.toString)
+    workers += n → (r, false)
+  }
+
+  def restartWorker(n: Int, i: Int) = {
+    workers.get(n) match {
+      case None ⇒ addWorker(i)
+      case Some(p) ⇒ {
+        val (who, _) = p
+        context.stop(who)
+      }
+    }
+  }
+
+  def removeWorker(n: Int) = {
+    workers.get(n).fold(()) { case (worker, active) ⇒
+      log.info(s"broker ${n} is removed")
+      if(active) {
+        router = router.removeRoutee(worker)
+      }
+
+      workers -= n
+      context.stop(worker)
     }
   }
 
   override def receive: Receive = {
-    case WorkerReady(who: ActorRef) ⇒ onWorkerReady(who)
+    case WorkerOnline               ⇒ onWorkerOnline
+    case WorkerOffline(cause)       ⇒ onWorkerOffline(cause)
     case RoutingEvent(o: Any)       ⇒ onRoutingRequest(o)
     case Terminated(who: ActorRef)  ⇒ onWorkerDown(who)
   }
 
-  private def onWorkerReady(who: ActorRef) = {
+  private def onWorkerOnline = {
     def shouldReport: Boolean = {
       reportStrategy match {
         case ReportOnFirstWorkerReady ⇒ router.routees.size == 1
@@ -51,12 +81,19 @@ trait AfkaRouter extends Actor with ActorLogging {
       }
     }
 
-    router = router.addRoutee(who)
-    workers(who.path.name.toInt) = (who, true)
+    router = router.addRoutee(sender())
+    workers(sender().path.name.toInt) = (sender(), true)
 
     if(shouldReport) {
-      listener ! WorkerReady(self)
+      listener ! WorkerOnline
     }
+  }
+
+  private def onWorkerOffline(cause: String) = {
+    log.warning(s"worker ${sender} offline: ${cause}")
+    router = router.removeRoutee(sender())
+    val i = sender().path.name.toInt
+    workers(sender().path.name.toInt) = (sender(), false)
   }
 
   private def onRoutingRequest(o: Any) = {
@@ -74,9 +111,10 @@ trait AfkaRouter extends Actor with ActorLogging {
   private def onWorkerDown(who: ActorRef) = {
     router = router.removeRoutee(who)
     val i = who.path.name.toInt
-    workers -= i
-    val r = createWorker(i)
-    workers += i -> (r, false)
+    if(workers.get(i).isDefined) {
+      workers -= i
+      addWorker(i)
+    }
   }
 
   def isWorkerReady(who: Int) = {

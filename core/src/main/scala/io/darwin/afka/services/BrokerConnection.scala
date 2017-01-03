@@ -3,6 +3,7 @@ package io.darwin.afka.services
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props, Terminated}
+import akka.io.Tcp.ErrorClosed
 import io.darwin.afka.packets.requests.KafkaRequest
 
 import scala.concurrent.duration._
@@ -36,6 +37,7 @@ object BrokerConnection {
 
     when(DISCONNECT, stateTimeout = 5 second) {
       case Event(StateTimeout, _) ⇒ {
+        log.info("reconnect")
         reconnect
         goto(CONNECTING)
       }
@@ -43,7 +45,7 @@ object BrokerConnection {
 
     when(CONNECTING, stateTimeout = 5 second) {
       case Event(KafkaClientConnected(_), _) ⇒ {
-        listener ! WorkerReady(self)
+        listener ! WorkerOnline
         goto(CONNECTED)
       }
     }
@@ -53,6 +55,11 @@ object BrokerConnection {
       case Event(r@ResponsePacket(_, req: RequestPacket), _) ⇒ {
         req.who ! r
         stay
+      }
+      case Event(ErrorClosed(cause), _) ⇒ {
+        listener ! WorkerOffline(cause)
+        closeConnection
+        goto(DISCONNECT)
       }
     }
 

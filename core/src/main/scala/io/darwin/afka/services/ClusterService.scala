@@ -8,8 +8,6 @@ import io.darwin.afka.domain.Brokers
 import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses.MetaDataResponse
 
-import scala.collection.mutable.Map
-
 /**
   * Created by darwin on 1/1/2017.
   */
@@ -63,7 +61,7 @@ class ClusterService(val clusterId  : String,
   }
 
   when(READY) {
-    case Event(_: WorkerReady, Dummy) ⇒ {
+    case Event(WorkerOnline, Dummy) ⇒ {
       log.info(s"custer ${clusterId} is ready!")
       listener ! ClusterReady
       stay
