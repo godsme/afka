@@ -2,10 +2,9 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{ActorRef, ActorSelection, FSM, Props, Terminated}
+import akka.actor.{ActorRef, FSM, Props}
 import io.darwin.afka.TopicId
 import io.darwin.afka.packets.responses.MetaDataResponse
-import io.darwin.afka.services.BrokerMaster.BrokerRequest
 
 /**
   * Created by darwin on 1/1/2017.
@@ -26,7 +25,7 @@ object ClusterService {
   case object Dummy extends Data
 
   case class CreateConsumer(groupId: String, topics: Array[TopicId])
-  case class ClusterReady()
+  case object ClusterReady
 }
 
 
@@ -37,12 +36,7 @@ class ClusterService(val clusterId  : String,
                      val listener   : ActorRef)
   extends FSM[State, Data]
 {
-  var workers = bootstraps.map { host ⇒
-    context.actorOf(BootStrap.props
-    ( remote   = host,
-      clientId = "cluster",
-      listener = self))
-  }
+  var bootstrap = context.actorOf(BootStrapService.props(bootstraps, self))
 
   startWith(BOOTSTRAP, Dummy)
 
@@ -53,14 +47,17 @@ class ClusterService(val clusterId  : String,
   }
 
   when(READY) {
-    case Event(e: MetaDataResponse, Dummy) ⇒ stay
+    case Event(e: WorkerReady, Dummy) ⇒ {
+      log.info(s"custer ${clusterId} is ready!")
+      listener ! ClusterReady
+      stay
+    }
   }
 
   var brokers: Option[ActorRef] = None
 
   def onMetaReceived(meta: MetaDataResponse) = {
-    log.info("meta data")
-    workers.foreach(context.stop)
+    context stop bootstrap
 
     brokers = Some(context.actorOf(BrokerService.props(
           brokers  = meta.brokers,
@@ -68,16 +65,13 @@ class ClusterService(val clusterId  : String,
           listener = self),
       "broker-service"))
 
-    listener ! ClusterReady()
-
     goto(READY)
   }
 
   whenUnhandled {
     case Event(e: CreateConsumer, _) ⇒ {
       if (brokers.isDefined) {
-        log.info("create consumer")
-        brokers.get.forward(BrokerRequest(e))
+        brokers.get.forward(RoutingEvent(e))
       } else {
         log.warning("not ready yet")
       }

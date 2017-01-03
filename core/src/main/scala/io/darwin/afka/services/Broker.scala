@@ -3,11 +3,7 @@ package io.darwin.afka.services
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props, Terminated}
-import io.darwin.afka.TopicId
-import io.darwin.afka.packets.requests.GroupCoordinateRequest
-import io.darwin.afka.packets.responses.GroupCoordinateResponse
-import io.darwin.afka.services.BrokerMaster.BrokerRequest
-import io.darwin.afka.services.ClusterService.CreateConsumer
+import io.darwin.afka.packets.requests.KafkaRequest
 
 import scala.concurrent.duration._
 
@@ -22,7 +18,6 @@ object Broker {
     Props(classOf[Broker], remote, clientId, listener)
   }
 
-  case class BrokerConnected(who: ActorRef)
 
   sealed trait State
   case object DISCONNECT   extends State
@@ -48,28 +43,22 @@ object Broker {
 
     when(CONNECTING, stateTimeout = 5 second) {
       case Event(KafkaClientConnected(_), _) ⇒ {
-        listener ! BrokerConnected(self)
+        listener ! WorkerReady(self)
         goto(CONNECTED)
       }
     }
 
     when(CONNECTED) {
-      case Event(request: BrokerRequest, _) ⇒ handleRequest(request)
-      case Event(ResponsePacket(r:GroupCoordinateResponse, who), _) ⇒ {
-        log.info("coord response received")
-        who ! r
+      case Event(RoutingEvent(request: RequestPacket), _) ⇒ handleRequest(request)
+      case Event(r@ResponsePacket(_, req: RequestPacket), _) ⇒ {
+        req.who ! r
         stay
       }
     }
 
-    var s: ActorRef = null
-
-    def handleRequest(request: BrokerRequest) = {
-      request.packet match {
-        case CreateConsumer(groupId, topics) ⇒ {
-          send(GroupCoordinateRequest(groupId), sender())
-        }
-      }
+    def handleRequest(request: RequestPacket) = {
+      val RequestPacket(req: KafkaRequest, who: ActorRef) = request
+      send(req, who)
       stay
     }
 

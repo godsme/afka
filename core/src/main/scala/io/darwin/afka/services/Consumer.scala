@@ -30,12 +30,10 @@ class Consumer(val group: String, val topics: Array[TopicId])
 
   setTimer("trigger", StateTimeout, 2 second, false)
 
-  log.info("Consumer ....")
   startWith(DISCONNECT, Dummy, Some(2 second))
 
   when(DISCONNECT, stateTimeout = 2 second) {
     case Event(StateTimeout, _) ⇒
-      log.info("send create consumer")
       context.actorSelection("/user/push-service/cluster") ! CreateConsumer(group, topics)
       goto(CONNECTING)
     case e ⇒

@@ -2,24 +2,22 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
+import akka.actor.{ActorLogging, ActorRef, Terminated}
 import akka.io.Tcp.Write
 import akka.util.ByteString
 import io.darwin.afka.decoder.{KafkaDecoder, decode}
 import io.darwin.afka.encoder.encode
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
+
 import scala.collection.mutable.Map
 
 case class RequestPacket(request: KafkaRequest, who: ActorRef)
-case class ResponsePacket(response: Any, who: ActorRef)
+case class ResponsePacket(response: Any, req: RequestPacket)
 
 /**
   * Created by darwin on 27/12/2016.
   */
-trait KafkaActor extends Actor {
-  override def receive: Receive = { case _ ⇒ throw new Exception("an actor should implemented receive")}
-}
 
 trait KafkaService extends KafkaActor with ActorLogging {
   this: {
@@ -53,11 +51,12 @@ trait KafkaService extends KafkaActor with ActorLogging {
     pendingRequests += lastCorrelationId → RequestPacket(req, who)
   }
 
-  private def decodeResponseBody(apiKey: Int, who: ActorRef, data: ByteString): Unit = {
+  private def decodeResponseBody(request: RequestPacket, data: ByteString): Unit = {
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      super.receive(ResponsePacket(decode[A](data), who))
+      super.receive(ResponsePacket(decode[A](data), request))
     }
 
+    val apiKey = request.request.apiKey
     if(apiKey == GroupCoordinateRequest.apiKey)   decodeRsp[GroupCoordinateResponse](data)
     else if(apiKey == MetaDataRequest.apiKey)     decodeRsp[MetaDataResponse](data)
     else if(apiKey == HeartBeatRequest.apiKey)    decodeRsp[HeartBeatResponse](data)
@@ -83,7 +82,7 @@ trait KafkaService extends KafkaActor with ActorLogging {
     else {
       pendingRequests -= id
       val r = req.get
-      decodeResponseBody(r.request.apiKey, r.who, data.slice(4, data.length))
+      decodeResponseBody(r, data.slice(4, data.length))
     }
   }
 
