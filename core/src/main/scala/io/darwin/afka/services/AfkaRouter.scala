@@ -29,9 +29,11 @@ trait AfkaRouter extends Actor with ActorLogging {
   private var workers: Map[Int, (ActorRef, Boolean)] = Map.empty
   private var router = Router(routingLogic, Vector.empty)
 
-  for(i ← 0 until numOfWorkers) {
-    val r = createWorker(i)
-    workers += i → (r, false)
+  def init = {
+    for(i ← 0 until numOfWorkers) {
+      val r = createWorker(i)
+      workers += i → (r, false)
+    }
   }
 
   override def receive: Receive = {

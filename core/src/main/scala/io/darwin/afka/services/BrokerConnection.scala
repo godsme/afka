@@ -10,12 +10,12 @@ import scala.concurrent.duration._
 /**
   * Created by darwin on 2/1/2017.
   */
-object Broker {
+object BrokerConnection {
 
   def props( remote     : InetSocketAddress,
              clientId   : String,
              listener   : ActorRef ) = {
-    Props(classOf[Broker], remote, clientId, listener)
+    Props(classOf[BrokerConnection], remote, clientId, listener)
   }
 
 
@@ -72,10 +72,10 @@ object Broker {
   }
 }
 
-class Broker
+class BrokerConnection
   ( val remote   : InetSocketAddress,
     val clientId : String,
     val listener : ActorRef )
-  extends KafkaActor with Broker.Actor with KafkaService
+  extends KafkaActor with BrokerConnection.Actor with KafkaService
 
 

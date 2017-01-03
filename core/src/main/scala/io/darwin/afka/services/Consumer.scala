@@ -27,15 +27,14 @@ import Consumer._
 class Consumer(val group: String, val topics: Array[TopicId])
   extends FSM[State1, Data] {
 
-
-  setTimer("trigger", StateTimeout, 2 second, false)
-
-  startWith(DISCONNECT, Dummy, Some(2 second))
+  startWith(DISCONNECT, Dummy)
 
   when(DISCONNECT, stateTimeout = 2 second) {
     case Event(StateTimeout, _) ⇒
+      log.info("send create consumer")
       context.actorSelection("/user/push-service/cluster") ! CreateConsumer(group, topics)
-      goto(CONNECTING)
+      stay
+      //goto(CONNECTING)
     case e ⇒
       log.info(s"${e}")
       stay
@@ -53,4 +52,5 @@ class Consumer(val group: String, val topics: Array[TopicId])
       stay()
   }
 
+  initialize()
 }

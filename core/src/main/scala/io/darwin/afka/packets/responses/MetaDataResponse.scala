@@ -31,8 +31,8 @@ case class TopicMetaData
 
 @KafkaResponsePacket
 case class MetaDataResponse
-  (brokers      : Array[BrokerResponse],
-   clusterId    : Option[String],
-   controllerId : Int,
-   topics       : Array[TopicMetaData])
+  ( brokers      : Array[BrokerResponse],
+    clusterId    : Option[String],
+    controllerId : Int,
+    topics       : Array[TopicMetaData])
 

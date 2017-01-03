@@ -27,9 +27,11 @@ class BrokerMaster(val remote   : InetSocketAddress,
   def routingLogic: RoutingLogic = RoundRobinRoutingLogic()
 
   def createWorker(i: Int): ActorRef = {
-    context.actorOf(Broker.props(remote, clientId, self), i.toString)
+    context.actorOf(BrokerConnection.props(remote, clientId, self), i.toString)
   }
 
   def reportStrategy: RouterReadyReportStrategy = ReportOnFirstWorkerReady
+
+  init
 }
 

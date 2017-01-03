@@ -22,7 +22,7 @@ class BootstrapMaster(val bootstraps : Array[InetSocketAddress],
   def routingLogic: RoutingLogic = RandomRoutingLogic()
 
   def createWorker(i: Int): ActorRef = {
-    context.actorOf(Broker.props(
+    context.actorOf(BrokerConnection.props(
         remote   = bootstraps(i),
         clientId = "bootstrap",
         listener = self),
@@ -30,4 +30,6 @@ class BootstrapMaster(val bootstraps : Array[InetSocketAddress],
   }
 
   def reportStrategy: RouterReadyReportStrategy = ReportOnFirstWorkerReady
+
+  init
 }

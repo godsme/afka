@@ -4,7 +4,11 @@ import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props}
 import io.darwin.afka.TopicId
+import io.darwin.afka.domain.Brokers
+import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses.MetaDataResponse
+
+import scala.collection.mutable.Map
 
 /**
   * Created by darwin on 1/1/2017.
@@ -36,31 +40,59 @@ class ClusterService(val clusterId  : String,
                      val listener   : ActorRef)
   extends FSM[State, Data]
 {
+  log.info("bootstrapping...")
   var bootstrap = context.actorOf(BootStrapService.props(bootstraps, self))
+  var connection: Option[ActorRef] = None
+
+  private def send[A <: KafkaRequest](req: A, who: ActorRef = self): Boolean = {
+    connection.fold(false) { c ⇒
+      c ! RoutingEvent(RequestPacket(req, who))
+      true
+    }
+  }
+
+  //val consumers: Map[String, (CreateConsumer, ActorRef)] = Map.empty
+  var brokers: Brokers = Brokers(Array.empty)
 
   startWith(BOOTSTRAP, Dummy)
 
   when(BOOTSTRAP) {
-    case Event(meta: MetaDataResponse, Dummy) ⇒ {
-      onMetaReceived(meta)
+    case Event(meta:MetaDataResponse, Dummy) ⇒ {
+      onBootstrapped(meta)
     }
   }
 
   when(READY) {
-    case Event(e: WorkerReady, Dummy) ⇒ {
+    case Event(_: WorkerReady, Dummy) ⇒ {
       log.info(s"custer ${clusterId} is ready!")
       listener ! ClusterReady
       stay
     }
+    case Event(e: CreateConsumer, _) ⇒ {
+      if(!send(MetaDataRequest(Some(e.topics)))) {
+        sender() ! NotReady(e)
+      }
+      stay
+    }
+    case Event(ResponsePacket(e: MetaDataResponse, req: RequestPacket), _) ⇒ {
+      val newBrokers = Brokers(e.brokers)
+      if(brokers != newBrokers) {
+        log.info("new brokers are different")
+        brokers = newBrokers
+        connection.get ! brokers
+      }
+
+      stay
+    }
   }
 
-  var brokers: Option[ActorRef] = None
-
-  def onMetaReceived(meta: MetaDataResponse) = {
+  def onBootstrapped(meta: MetaDataResponse) = {
     context stop bootstrap
 
-    brokers = Some(context.actorOf(BrokerService.props(
-          brokers  = meta.brokers,
+    brokers = Brokers(meta.brokers)
+
+    connection = Some(context.actorOf(BrokerService.props(
+          brokers  = brokers,
           clientId = "push-service",
           listener = self),
       "broker-service"))
@@ -68,16 +100,6 @@ class ClusterService(val clusterId  : String,
     goto(READY)
   }
 
-  whenUnhandled {
-    case Event(e: CreateConsumer, _) ⇒ {
-      if (brokers.isDefined) {
-        brokers.get.forward(RoutingEvent(e))
-      } else {
-        log.warning("not ready yet")
-      }
-      stay
-    }
-  }
 }
 
 

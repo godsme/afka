@@ -33,7 +33,6 @@ class PushService
 
   override def receive: Receive = {
     case ClusterReady ⇒ {
-      log.info("cluster ready")
       consumer = context.actorOf(Consumer.props("darwin-group", Array("godsme-3", "godsme-4")), "consumer")
       context watch consumer
     }
