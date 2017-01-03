@@ -21,11 +21,11 @@ case object ReportOnAllWorkerReady   extends RouterReadyReportStrategy
   */
 trait AfkaRouter extends Actor with ActorLogging {
   this: {
-    def numOfWorkers: Int
-    def routingLogic: RoutingLogic
-    def createWorker(i: Int): (Int, Props)
-    def reportStrategy: RouterReadyReportStrategy
-    val listener: ActorRef
+    def numOfWorkers         : Int
+    def routingLogic         : RoutingLogic
+    def reportStrategy       : RouterReadyReportStrategy
+    val listener             : ActorRef
+    def createWorker(i: Int) : (Int, Props)
   } ⇒
 
   private var workers: Map[Int, (ActorRef, Boolean)] = Map.empty
@@ -40,16 +40,17 @@ trait AfkaRouter extends Actor with ActorLogging {
   def addWorker(i: Int): Unit = {
     val (n, p) = createWorker(i)
     val r = context.actorOf(p, n.toString)
+    context watch r
     workers += n → (r, false)
   }
 
   def restartWorker(n: Int, i: Int) = {
-    workers.get(n) match {
-      case None ⇒ addWorker(i)
-      case Some(p) ⇒ {
-        val (who, _) = p
-        context.stop(who)
-      }
+    workers.get(n).fold {
+      addWorker(i)
+    }
+    { case (who, _) ⇒
+      log.info(s"restart ${who}")
+      context.stop(who)
     }
   }
 
@@ -81,24 +82,26 @@ trait AfkaRouter extends Actor with ActorLogging {
       }
     }
 
-    router = router.addRoutee(sender())
-    workers(sender().path.name.toInt) = (sender(), true)
+    router = router.addRoutee(sender)
+    workers(getIndex) = (sender, true)
 
     if(shouldReport) {
       listener ! WorkerOnline
     }
   }
 
+  private def getIndex = sender.path.name.toInt
+
   private def onWorkerOffline(cause: String) = {
     log.warning(s"worker ${sender} offline: ${cause}")
+
     router = router.removeRoutee(sender())
-    val i = sender().path.name.toInt
-    workers(sender().path.name.toInt) = (sender(), false)
+    workers(getIndex) = (sender, false)
   }
 
   private def onRoutingRequest(o: Any) = {
     if(!send(o)) {
-      sender() ! NotReady(o)
+      sender ! NotReady(o)
     }
   }
 
@@ -109,15 +112,20 @@ trait AfkaRouter extends Actor with ActorLogging {
   }
 
   private def onWorkerDown(who: ActorRef) = {
+    log.info(s"worker ${who} shutdown")
+
     router = router.removeRoutee(who)
-    val i = who.path.name.toInt
+    val i = getIndex
+
     if(workers.get(i).isDefined) {
       workers -= i
       addWorker(i)
+    } else{
+      log.info(s"Worker ${who} Disappear")
     }
   }
 
-  def isWorkerReady(who: Int) = {
-    workers(who)._2
+  override def postStop = {
+    log.info(s"${self} is shutting down!")
   }
 }

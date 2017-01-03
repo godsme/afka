@@ -32,7 +32,7 @@ object MetaDataService {
     private var cluster: Option[KafkaCluster] = None
 
     override def receive: Receive = {
-      case KafkaClientConnected(_)        ⇒ send(MetaDataRequest(Some(topics)))
+      case KafkaClientConnected(_)        ⇒ sending(MetaDataRequest(Some(topics)))
       case meta:  MetaDataResponse        ⇒ handleMetadataRsp(meta)
       case coord: GroupCoordinateResponse ⇒ handleCoordinatorRsp(coord)
       case term: Terminated ⇒ {
@@ -45,7 +45,7 @@ object MetaDataService {
       cluster = Some(KafkaCluster(meta))
       log.info(s"\n${cluster.get}")
 
-      send(GroupCoordinateRequest(groupId))
+      sending(GroupCoordinateRequest(groupId))
     }
 
     private def handleCoordinatorRsp(co: GroupCoordinateResponse) = {

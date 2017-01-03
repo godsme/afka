@@ -36,7 +36,7 @@ object FetchService {
     }
 
     private def onConnected = {
-      send(request)
+      sending(request)
     }
 
     private def onMessageFetched(msg: FetchResponse) = {

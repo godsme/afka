@@ -14,6 +14,7 @@ import scala.collection.mutable.Map
 
 case class RequestPacket(request: KafkaRequest, who: ActorRef)
 case class ResponsePacket(response: Any, req: RequestPacket)
+case class InternalResp(rsp: ResponsePacket, reply: ActorRef)
 
 /**
   * Created by darwin on 27/12/2016.
@@ -43,17 +44,25 @@ trait KafkaService extends KafkaActor with ActorLogging {
 
   private var socket: Option[ActorRef] = None
 
-  private var pendingRequests: Map[Int,  RequestPacket] = Map.empty
+  private var pendingRequests: Map[Int,  (RequestPacket, ActorRef)] = Map.empty
 
-  protected def send[A <: KafkaRequest](req: A, who: ActorRef = self) = {
+  protected def doSend[A <: KafkaRequest](req: A) = {
     lastCorrelationId += 1
     socket.get ! Write(encode(req, lastCorrelationId, clientId))
-    pendingRequests += lastCorrelationId → RequestPacket(req, who)
   }
 
-  private def decodeResponseBody(request: RequestPacket, data: ByteString): Unit = {
+  protected def send(request: RequestPacket, from: ActorRef = sender()) = {
+    doSend(request.request)
+    pendingRequests += lastCorrelationId → (request, from)
+  }
+
+  protected def sending[A <: KafkaRequest](req: A, from: ActorRef = sender()) = {
+    send(RequestPacket(req, from), from)
+  }
+
+  private def decodeResponseBody(request: RequestPacket, data: ByteString, from: ActorRef): Unit = {
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      super.receive(ResponsePacket(decode[A](data), request))
+      super.receive(InternalResp(ResponsePacket(decode[A](data), request), from))
     }
 
     val apiKey = request.request.apiKey
@@ -82,7 +91,7 @@ trait KafkaService extends KafkaActor with ActorLogging {
     else {
       pendingRequests -= id
       val r = req.get
-      decodeResponseBody(r, data.slice(4, data.length))
+      decodeResponseBody(r._1, data.slice(4, data.length), r._2)
     }
   }
 

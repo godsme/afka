@@ -19,7 +19,6 @@ object BrokerConnection {
     Props(classOf[BrokerConnection], remote, clientId, listener)
   }
 
-
   sealed trait State
   case object DISCONNECT   extends State
   case object CONNECTING   extends State
@@ -51,9 +50,9 @@ object BrokerConnection {
     }
 
     when(CONNECTED) {
-      case Event(RoutingEvent(request: RequestPacket), _) ⇒ handleRequest(request)
-      case Event(r@ResponsePacket(_, req: RequestPacket), _) ⇒ {
-        req.who ! r
+      case Event(RoutingEvent(r:RequestPacket), _) ⇒ handleRequest(r)
+      case Event(InternalResp(r:ResponsePacket, from), _) ⇒ {
+        from ! r
         stay
       }
       case Event(ErrorClosed(cause), _) ⇒ {
@@ -64,8 +63,7 @@ object BrokerConnection {
     }
 
     def handleRequest(request: RequestPacket) = {
-      val RequestPacket(req: KafkaRequest, who: ActorRef) = request
-      send(req, who)
+      send(request)
       stay
     }
 
@@ -75,6 +73,11 @@ object BrokerConnection {
         closeConnection
         goto(DISCONNECT)
       }
+    }
+
+    override def postStop = {
+      log.info(s"${self} is shutting down!")
+      super.postStop
     }
   }
 }

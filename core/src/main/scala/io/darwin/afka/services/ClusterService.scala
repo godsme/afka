@@ -42,11 +42,19 @@ class ClusterService(val clusterId  : String,
   var bootstrap = context.actorOf(BootStrapService.props(bootstraps, self))
   var connection: Option[ActorRef] = None
 
-  private def send[A <: KafkaRequest](req: A, who: ActorRef = self): Boolean = {
+  private def doSend[A <: KafkaRequest](req: A, who: ActorRef)(sending : (ActorRef, Any) ⇒ Unit): Boolean = {
     connection.fold(false) { c ⇒
-      c ! RoutingEvent(RequestPacket(req, who))
+      sending(c, RoutingEvent(RequestPacket(req, who)))
       true
     }
+  }
+
+  private def send[A <: KafkaRequest](req: A, who: ActorRef = sender()): Boolean = {
+    doSend(req, who)((c, m) ⇒ c ! m)
+  }
+
+  private def forward[A <: KafkaRequest](req: A, who: ActorRef = sender()): Boolean = {
+    doSend(req, who)((c, m) ⇒ c.forward(m))
   }
 
   //val consumers: Map[String, (CreateConsumer, ActorRef)] = Map.empty
@@ -68,7 +76,7 @@ class ClusterService(val clusterId  : String,
     }
     case Event(e: CreateConsumer, _) ⇒ {
       if(!send(MetaDataRequest(Some(e.topics)))) {
-        sender() ! NotReady(e)
+        sender ! NotReady(e)
       }
       stay
     }
@@ -79,6 +87,8 @@ class ClusterService(val clusterId  : String,
         brokers = newBrokers
         connection.get ! brokers
       }
+
+      req.who ! e
 
       stay
     }

@@ -17,21 +17,19 @@ object BrokerMaster {
   }
 }
 
-class BrokerMaster(val remote   : InetSocketAddress,
-                   val clientId : String,
-                   val node     : Int,
-                   val listener : ActorRef)
+class BrokerMaster( val remote   : InetSocketAddress,
+                    val clientId : String,
+                    val node     : Int,
+                    val listener : ActorRef)
   extends AfkaRouter {
 
   def numOfWorkers: Int = 2
+
   def routingLogic: RoutingLogic = RoundRobinRoutingLogic()
 
-  def createWorker(i: Int) = {
-    (i, BrokerConnection.props(remote, clientId, self))
-  }
+  def createWorker(i: Int) = (i, BrokerConnection.props(remote, clientId, self))
 
   def reportStrategy: RouterReadyReportStrategy = ReportOnFirstWorkerReady
 
   init
 }
-

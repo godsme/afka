@@ -1,6 +1,6 @@
 package io.darwin.afka.services
 
-import akka.actor.{FSM, Props, Terminated}
+import akka.actor.{FSM, Props}
 import io.darwin.afka.TopicId
 import io.darwin.afka.services.ClusterService.CreateConsumer
 
@@ -10,9 +10,7 @@ import scala.concurrent.duration._
   */
 object Consumer {
   def props( group  : String,
-             topics : Array[TopicId]) = {
-    Props(classOf[Consumer], group, topics)
-  }
+             topics : Array[TopicId]) =  Props(classOf[Consumer], group, topics)
 
   sealed trait State1
   case object DISCONNECT   extends State1
@@ -22,22 +20,18 @@ object Consumer {
   case object Dummy extends Data
 }
 
-import Consumer._
+import io.darwin.afka.services.Consumer._
 
 class Consumer(val group: String, val topics: Array[TopicId])
   extends FSM[State1, Data] {
 
   startWith(DISCONNECT, Dummy)
 
-  when(DISCONNECT, stateTimeout = 2 second) {
+  when(DISCONNECT, stateTimeout = 5 second) {
     case Event(StateTimeout, _) ⇒
-      log.info("send create consumer")
       context.actorSelection("/user/push-service/cluster") ! CreateConsumer(group, topics)
       stay
       //goto(CONNECTING)
-    case e ⇒
-      log.info(s"${e}")
-      stay
   }
 
   when(CONNECTING) {
@@ -47,6 +41,10 @@ class Consumer(val group: String, val topics: Array[TopicId])
   }
 
   whenUnhandled {
+    case Event(Unreachable(to, msg), _) ⇒ {
+      log.info(s"${to} unreachable, ${msg} is not delivered")
+      stay
+    }
     case e ⇒
       log.info(s"${e}")
       stay()

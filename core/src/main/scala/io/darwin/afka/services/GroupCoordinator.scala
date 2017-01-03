@@ -122,7 +122,7 @@ object GroupCoordinator {
 
 
     private def joinGroup: State = {
-      send(JoinGroupRequest(
+      sending(JoinGroupRequest(
         groupId   = groupId,
         memberId  = memberId.getOrElse(""),
         protocols = Array(GroupProtocol(
@@ -144,7 +144,7 @@ object GroupCoordinator {
       generation = rsp.generation
       memberId = Some(rsp.memberId)
 
-      send(sync(rsp))
+      sending(sync(rsp))
 
       goto(PHASE2)
     }
@@ -191,7 +191,7 @@ object GroupCoordinator {
       def fetchOffset = {
         logMsg
 
-        send(OffsetFetchRequest(
+        sending(OffsetFetchRequest(
           group  = groupId,
           topics = r.assignment.get.topics))
 
@@ -244,7 +244,7 @@ object GroupCoordinator {
 
         if(topics.size > 0) {
           logging
-          send(FetchRequest(topics = topics))
+          sending(FetchRequest(topics = topics))
         }
       }
 
@@ -271,7 +271,7 @@ object GroupCoordinator {
 
     def autoCommit(msgs: MutableList[TopicMessages]) = {
       def sendCommit = {
-        send(OffsetCommitRequest(
+        sending(OffsetCommitRequest(
           groupId    = groupId,
           generation = generation,
           consumerId = memberId.get,
@@ -319,7 +319,7 @@ object GroupCoordinator {
     }
 
     private def heartBeat = {
-      send(HeartBeatRequest(groupId, generation, memberId.get))
+      sending(HeartBeatRequest(groupId, generation, memberId.get))
       stay
     }
 
