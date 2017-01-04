@@ -1,7 +1,9 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.common
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
 import akka.routing.{Router, RoutingLogic}
+import io.darwin.afka.packets.requests._
+import io.darwin.afka.packets.responses.SyncGroupResponse
 
 import scala.collection.mutable.Map
 
@@ -9,7 +11,6 @@ case object WorkerOnline
 case class WorkerOffline(cause: String)
 
 case class NotReady(any: Any)
-case class RoutingEvent(event: Any)
 
 sealed trait RouterReadyReportStrategy
 case object ReportNothing            extends RouterReadyReportStrategy
@@ -69,7 +70,12 @@ trait AfkaRouter extends Actor with ActorLogging {
   override def receive: Receive = {
     case WorkerOnline               ⇒ onWorkerOnline
     case WorkerOffline(cause)       ⇒ onWorkerOffline(cause)
-    case RoutingEvent(o: Any)       ⇒ onRoutingRequest(o)
+    case e:RequestPacket            ⇒ onRoutingRequest(e)
+    case e:JoinGroupRequest         ⇒ onRoutingRequest(e)
+    case e:SyncGroupRequest         ⇒ onRoutingRequest(e)
+    case e:OffsetFetchRequest       ⇒ onRoutingRequest(e)
+    case e:HeartBeatRequest         ⇒ onRoutingRequest(e)
+    case e:FetchRequest             ⇒ onRoutingRequest(e)
     case Terminated(who: ActorRef)  ⇒ onWorkerDown(who)
   }
 
@@ -107,7 +113,7 @@ trait AfkaRouter extends Actor with ActorLogging {
 
   def send(o: Any): Boolean = {
     if(router.routees.size == 0) return false
-    router.route(RoutingEvent(o), sender())
+    router.route(o, sender())
     true
   }
 

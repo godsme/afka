@@ -1,9 +1,10 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.pool
 
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, Props}
-import akka.routing.{RandomRoutingLogic, RoundRobinRoutingLogic, RoutingLogic}
+import akka.routing.{RandomRoutingLogic, RoutingLogic}
+import io.darwin.afka.services.common.{AfkaRouter, ReportOnFirstWorkerReady, RouterReadyReportStrategy}
 
 /**
   * Created by darwin on 3/1/2017.

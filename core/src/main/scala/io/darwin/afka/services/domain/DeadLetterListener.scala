@@ -1,4 +1,4 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.domain
 
 import akka.actor.{Actor, ActorRef, DeadLetter}
 

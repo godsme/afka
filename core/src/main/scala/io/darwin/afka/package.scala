@@ -9,4 +9,5 @@ package object afka {
   type TopicId     = String
   type PartitionId = Int
 
+  implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
 }

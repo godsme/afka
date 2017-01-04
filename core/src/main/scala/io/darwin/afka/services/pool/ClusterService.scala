@@ -1,12 +1,13 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.pool
 
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props}
 import io.darwin.afka.TopicId
 import io.darwin.afka.domain.Brokers
-import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
+import io.darwin.afka.packets.requests.{GroupCoordinateRequest, KafkaRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses.MetaDataResponse
+import io.darwin.afka.services.common._
 
 /**
   * Created by darwin on 1/1/2017.
@@ -26,12 +27,11 @@ object ClusterService {
   sealed trait Data
   case object Dummy extends Data
 
-  case class CreateConsumer(groupId: String, topics: Array[TopicId])
+  case class  CreateConsumer(groupId: String, topics: Array[TopicId])
   case object ClusterReady
 }
 
-
-import io.darwin.afka.services.ClusterService._
+import ClusterService._
 
 class ClusterService(val clusterId  : String,
                      val bootstraps : Array[InetSocketAddress],
@@ -44,7 +44,7 @@ class ClusterService(val clusterId  : String,
 
   private def doSend[A <: KafkaRequest](req: A, who: ActorRef)(sending : (ActorRef, Any) ⇒ Unit): Boolean = {
     connection.fold(false) { c ⇒
-      sending(c, RoutingEvent(RequestPacket(req, who)))
+      sending(c, RequestPacket(req, who))
       true
     }
   }
@@ -74,10 +74,14 @@ class ClusterService(val clusterId  : String,
       listener ! ClusterReady
       stay
     }
-    case Event(e: CreateConsumer, _) ⇒ {
-      if(!send(MetaDataRequest(Some(e.topics)))) {
+    case Event(e: MetaDataRequest, _) ⇒ {
+      if(!send(e)) {
         sender ! NotReady(e)
       }
+      stay
+    }
+    case Event(e: GroupCoordinateRequest, _) ⇒  {
+      forward(e)
       stay
     }
     case Event(ResponsePacket(e: MetaDataResponse, req: RequestPacket), _) ⇒ {

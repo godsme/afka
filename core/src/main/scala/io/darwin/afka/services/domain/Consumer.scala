@@ -1,10 +1,14 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.domain
 
 import akka.actor.{FSM, Props}
 import io.darwin.afka.TopicId
-import io.darwin.afka.services.ClusterService.CreateConsumer
+import io.darwin.afka.domain.KafkaCluster
+import io.darwin.afka.packets.requests.MetaDataRequest
+import io.darwin.afka.packets.responses.MetaDataResponse
+import io.darwin.afka.services.domain.MetaDataService.SessionMetaData
 
 import scala.concurrent.duration._
+
 /**
   * Created by darwin on 2/1/2017.
   */
@@ -20,18 +24,27 @@ object Consumer {
   case object Dummy extends Data
 }
 
-import io.darwin.afka.services.Consumer._
+import Consumer._
 
 class Consumer(val group: String, val topics: Array[TopicId])
   extends FSM[State1, Data] {
 
   startWith(DISCONNECT, Dummy)
 
-  when(DISCONNECT, stateTimeout = 5 second) {
+  context.actorOf(MetaDataService.props("", group, topics, self), "meta-data-fetcher")
+
+  when(DISCONNECT) {
     case Event(StateTimeout, _) ⇒
-      context.actorSelection("/user/push-service/cluster") ! CreateConsumer(group, topics)
+      //context.actorSelection("/user/push-service/cluster") ! MetaDataRequest(Some(topics))
       stay
-      //goto(CONNECTING)
+    case Event(SessionMetaData(meta, coordinator), _) ⇒
+      context watch context.actorOf(GroupCoordinator.props(
+                    coordinator   = coordinator,
+                    clientId = "",
+                    groupId  = group,
+                    cluster  = KafkaCluster(meta),
+                    topics   = topics), "coordinator")
+      goto(CONNECTING)
   }
 
   when(CONNECTING) {

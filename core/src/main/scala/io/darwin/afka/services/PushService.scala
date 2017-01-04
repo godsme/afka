@@ -4,7 +4,9 @@ import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import com.typesafe.config.ConfigFactory
-import io.darwin.afka.services.ClusterService.ClusterReady
+import io.darwin.afka.services.domain.Consumer
+import io.darwin.afka.services.pool.ClusterService
+import io.darwin.afka.services.pool.ClusterService.ClusterReady
 
 /**
   * Created by darwin on 2/1/2017.

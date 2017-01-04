@@ -21,7 +21,7 @@ case class FetchTopicRequest
 @KafkaRequestPacket(apiKey = 1, version = 3)
 case class FetchRequest
   ( replica     : Int = -1,
-    maxWaitTime : Int = 1000,
+    maxWaitTime : Int = 10000,
     minBytes    : Int = 1, //8 * 1024,
     maxBytes    : Int = 64 * 1024,
     topics      : Array[FetchTopicRequest])

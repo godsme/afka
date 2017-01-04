@@ -18,7 +18,7 @@ case class ByteStringSourceChannel(buf: ByteString)
   override def getBytes(v: Array[Byte]) = i.getBytes(v)
 
   override def getByteString(size: Int): ByteString = {
-    var r = i.clone().take(size).toByteString
+    val r = i.clone().take(size).toByteString
     i.drop(size)
     r
   }

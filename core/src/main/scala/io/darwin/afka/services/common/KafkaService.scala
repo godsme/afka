@@ -1,4 +1,4 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.common
 
 import java.net.InetSocketAddress
 
@@ -9,6 +9,7 @@ import io.darwin.afka.decoder.{KafkaDecoder, decode}
 import io.darwin.afka.encoder.encode
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
+import io.darwin.afka.byteOrder
 
 import scala.collection.mutable.Map
 
@@ -20,7 +21,7 @@ case class InternalResp(rsp: ResponsePacket, reply: ActorRef)
   * Created by darwin on 27/12/2016.
   */
 
-trait KafkaService extends KafkaActor with ActorLogging {
+trait KafkaService extends KafkaActor with KafkaServiceSinkChannel with ActorLogging {
   this: {
     val remote: InetSocketAddress
     val clientId: String
@@ -51,12 +52,12 @@ trait KafkaService extends KafkaActor with ActorLogging {
     socket.get ! Write(encode(req, lastCorrelationId, clientId))
   }
 
-  protected def send(request: RequestPacket, from: ActorRef = sender()) = {
+  protected def send(request: RequestPacket, from: ActorRef) = {
     doSend(request.request)
     pendingRequests += lastCorrelationId → (request, from)
   }
 
-  protected def sending[A <: KafkaRequest](req: A, from: ActorRef = sender()) = {
+  override def sending[A <: KafkaRequest](req: A, from: ActorRef) = {
     send(RequestPacket(req, from), from)
   }
 

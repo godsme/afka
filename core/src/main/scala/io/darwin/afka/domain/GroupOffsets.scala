@@ -43,15 +43,24 @@ object GroupOffsets {
       }
     }
 
+    def updatePartitionError(partition: PartitionId, error: Short): Boolean = {
+      offsets.get(partition) match {
+        case None ⇒ false
+        case Some(p) ⇒
+          offsets(partition) = PartitionOffset(partition, Some(PartitionOffsetInfo(p.info.get.offset, error)))
+          true
+      }
+    }
+
     def toRequest = {
-      offsets.toArray.filter{p ⇒ p._2.info.isDefined && p._2.info.get.error == 0}.map {
-        case (id, p) ⇒ FetchPartitionRequest(id, p.info.get.offset)
+      offsets.toArray.filter{case (_, p) ⇒ p.info.isDefined && p.info.get.error == 0}.map {
+        case (id, p) ⇒ FetchPartitionRequest(id, p.info.get.offset + 1)
       }
     }
 
     override def toString = {
       offsets.map {
-        case (p, o) ⇒ s"partition=${p}, ${o.toString}"
+        case (p, o) ⇒ s"[partition=${p}, ${o.toString}]"
       }.mkString(",")
     }
 
@@ -73,10 +82,24 @@ object GroupOffsets {
       }
     }
 
+    def updatePartitionError(topic: TopicId, partition: PartitionId, error: Short): Boolean = {
+      offsets.get(topic) match {
+        case None ⇒ false
+        case Some(p) ⇒ p.updatePartitionError(partition, error)
+      }
+    }
+
+    def updateOffset(topic: TopicId, partition: PartitionId, offset: PartitionOffsetInfo): Boolean = {
+      offsets.get(topic) match {
+        case None ⇒ false
+        case Some(p) ⇒ p.updatePartition(partition, offset)
+      }
+    }
+
     def toRequest = {
       FetchRequest(
-        topics = offsets.toArray.map {
-          case (topic, part) ⇒ FetchTopicRequest(topic, part.toRequest)
+        topics = offsets.toArray.map { case (topic, part) ⇒
+          FetchTopicRequest(topic, part.toRequest)
         })
     }
 
@@ -90,7 +113,7 @@ object GroupOffsets {
   class GroupOffsets(cluster: KafkaCluster, group: Array[ProtoPartitionAssignment]) {
     type NodeMap = Map[NodeId, NodeOffsets]
 
-    private val offsets: NodeMap = Map.empty
+    val offsets: NodeMap = Map.empty
 
     group.foreach {
       case ProtoPartitionAssignment(topic, partitions) ⇒
@@ -106,6 +129,8 @@ object GroupOffsets {
           }
         }
     }
+
+    println(cluster.toString)
 
     private def addNode(node: NodeId): NodeOffsets = {
       offsets.getOrElseUpdate(node, NodeOffsets(node))
@@ -137,9 +162,9 @@ object GroupOffsets {
           }
       }
 
-//      offsets.foreach {
-//        case (node, n) ⇒ println(s"node = ${node}, ${n.toString}")
-//      }
+      offsets.foreach {
+        case (node, n) ⇒ println(s"node = ${node}, ${n.toString}")
+      }
     }
 
     def toRequests = {

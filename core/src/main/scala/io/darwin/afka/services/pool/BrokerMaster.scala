@@ -1,9 +1,10 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.pool
 
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, Props}
 import akka.routing._
+import io.darwin.afka.services.common.{AfkaRouter, ReportOnFirstWorkerReady, RouterReadyReportStrategy}
 
 /**
   * Created by darwin on 2/1/2017.
@@ -23,7 +24,7 @@ class BrokerMaster( val remote   : InetSocketAddress,
                     val listener : ActorRef)
   extends AfkaRouter {
 
-  def numOfWorkers: Int = 2
+  def numOfWorkers: Int = 4
 
   def routingLogic: RoutingLogic = RoundRobinRoutingLogic()
 

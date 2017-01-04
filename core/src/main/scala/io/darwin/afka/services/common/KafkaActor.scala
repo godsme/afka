@@ -1,4 +1,4 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.common
 
 import akka.actor.Actor
 

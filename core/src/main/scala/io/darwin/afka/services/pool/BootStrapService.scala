@@ -1,10 +1,11 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.pool
 
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props}
 import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses.MetaDataResponse
+import io.darwin.afka.services.common.{RequestPacket, ResponsePacket, WorkerOnline}
 
 import scala.concurrent.duration._
 
@@ -26,7 +27,7 @@ object BootStrapService {
   case object Fetch extends Data
 }
 
-import BootStrapService._
+import io.darwin.afka.services.pool.BootStrapService._
 
 class BootStrapService
   ( val bootstraps : Array[InetSocketAddress]
@@ -34,7 +35,7 @@ class BootStrapService
   extends FSM[State, Data] {
 
   var bootstrap = context.actorOf(BootstrapMaster.props(bootstraps, self))
-  def send[A <: KafkaRequest](any: A) = bootstrap ! RoutingEvent(RequestPacket(any, self))
+  def send[A <: KafkaRequest](any: A) = bootstrap ! RequestPacket(any, self)
 
   startWith(INIT, Dummy)
 

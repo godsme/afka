@@ -1,11 +1,12 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.common
 
 import java.net.InetSocketAddress
 
-import akka.actor.SupervisorStrategy.{Restart, Stop}
+import akka.actor.SupervisorStrategy.Stop
 import akka.actor.{Actor, ActorLogging, ActorRef, OneForOneStrategy, Props}
 import akka.io.{IO, Tcp}
 import akka.util.ByteString
+import io.darwin.afka.byteOrder
 
 /**
   * Created by darwin on 26/12/2016.

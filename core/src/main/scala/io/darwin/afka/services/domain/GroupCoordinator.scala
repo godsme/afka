@@ -1,20 +1,21 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.domain
 
 import java.net.InetSocketAddress
 
 import akka.actor.FSM.Failure
 import akka.actor.{ActorRef, FSM, Props, Terminated}
-import akka.util.ByteString
 import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
+import io.darwin.afka.decoder.decode
+import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
+import io.darwin.afka.domain.GroupOffsets.GroupOffsets
 import io.darwin.afka.domain.{FetchedMessages, GroupOffsets, KafkaCluster}
-import io.darwin.afka.packets.common.{ProtoMemberAssignment, ProtoMessageInfo, ProtoPartitionAssignment, ProtoSubscription}
+import io.darwin.afka.encoder.encode
+import io.darwin.afka.packets.common.{ProtoMemberAssignment, ProtoPartitionAssignment, ProtoSubscription}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.{SyncGroupResponse, _}
-import io.darwin.afka.decoder.{decode, decoding}
-import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
-import io.darwin.afka.domain.GroupOffsets.{GroupOffsets, PartitionOffsetInfo}
-import io.darwin.afka.encoder.encode
+import io.darwin.afka.services.common._
+import io.darwin.afka.services.pool.PoolSinkChannel
 
 import scala.collection.mutable.MutableList
 import scala.concurrent.duration._
@@ -26,12 +27,12 @@ import scala.concurrent.duration._
 ///////////////////////////////////////////////////////////////////////
 object GroupCoordinator {
 
-  def props( remote   : InetSocketAddress,
-             clientId : String,
-             groupId  : String,
-             cluster  : KafkaCluster,
-             topics   : Array[String] ) = {
-    Props(classOf[GroupCoordinator], remote, clientId, groupId, cluster, topics)
+  def props( coordinator : Coordinator,
+             clientId    : String,
+             groupId     : String,
+             cluster     : KafkaCluster,
+             topics      : Array[String] ) = {
+    Props(classOf[GroupCoordinator], coordinator, clientId, groupId, cluster, topics)
   }
 
   sealed trait State
@@ -46,7 +47,7 @@ object GroupCoordinator {
 
 
   trait Actor extends FSM[State, Data] {
-    this: Actor with KafkaService {
+    this: Actor with KafkaServiceSinkChannel {
       val topics  : Array[String]
       val clientId: String
       val groupId : String
@@ -68,9 +69,8 @@ object GroupCoordinator {
       case Event(StateTimeout, Dummy) ⇒ goto(CONNECTING)
     }
 
-
     when(CONNECTING, stateTimeout = 60 second) {
-      case Event(KafkaClientConnected(_), Dummy) ⇒ joinGroup
+      case Event(ChannelConnected, Dummy) ⇒ joinGroup
     }
 
     when(PHASE1) {
@@ -93,18 +93,19 @@ object GroupCoordinator {
       }
     }
 
-
     when(JOINED, stateTimeout = 8 second) {
       case Event(StateTimeout, Dummy)                  ⇒ heartBeat
       case Event(offsets: OffsetFetchResponse, Dummy)  ⇒ onOffsetFetched(offsets)
-      case Event(msg: FetchResponse, Dummy)            ⇒ onMessageFetched(msg)
       case Event(commit: OffsetCommitResponse, Dummy)  ⇒ onCommitted(commit)
       case Event(r: HeartBeatResponse, Dummy) ⇒ {
         r.error match {
           case KafkaErrorCode.NO_ERROR                 ⇒ stay
-          case KafkaErrorCode.ILLEGAL_GENERATION |
-               KafkaErrorCode.UNKNOWN_MEMBER_ID  |
-               KafkaErrorCode.REBALANCE_IN_PROGRESS    ⇒ {
+          case KafkaErrorCode.UNKNOWN_MEMBER_ID        ⇒ {
+            memberId = None
+            joinGroup
+          }
+          case KafkaErrorCode.REBALANCE_IN_PROGRESS  |
+               KafkaErrorCode.ILLEGAL_GENERATION       ⇒ {
             log.info(s"heart beat: code = ${r.error}")
             joinGroup
           }
@@ -120,8 +121,9 @@ object GroupCoordinator {
     /////////////////////////////////////////////////////////////////
     val assigner = new RangeAssignor
 
-
     private def joinGroup: State = {
+      stopFetchers
+
       sending(JoinGroupRequest(
         groupId   = groupId,
         memberId  = memberId.getOrElse(""),
@@ -184,7 +186,7 @@ object GroupCoordinator {
       def logMsg = {
         r.assignment.get.topics.foreach {
           case ProtoPartitionAssignment(topic, partitions) ⇒
-            log.info(s"topic=${topic}, paritions={${partitions.mkString(", ")}}")
+            log.info(s"topic=${topic}, partitions={${partitions.mkString(", ")}}")
         }
       }
 
@@ -207,65 +209,24 @@ object GroupCoordinator {
       }
     }
 
-    private def fetchMessages(offsets: OffsetFetchResponse) = {
+    var fetchers: Array[ActorRef] = Array.empty
 
-      def logFailedInfos = {
-        offsets.topics.foreach {
-          case OffsetFetchTopicResponse(topic, partitions) ⇒
-            partitions.filter(_.error != KafkaErrorCode.NO_ERROR).foreach {
-              case OffsetFetchPartitionResponse(part, offset, _, error) ⇒
-                log.info(s"fetch offset error = ${error} on ${topic}: ${part} : ${offset}")
-            }
-        }
-      }
-
-      def fetchingTopics: Array[FetchTopicRequest] = {
-        offsets.topics.map {
-          case OffsetFetchTopicResponse(topic, partitions) ⇒
-            FetchTopicRequest(
-              topic      = topic,
-              partitions = partitions.filter(p ⇒ p.error == KafkaErrorCode.NO_ERROR).map {
-                case OffsetFetchPartitionResponse(partition, offset, _, _) ⇒
-                  FetchPartitionRequest(partition, offset+1)
-              })
-        }
-      }
-
-      def fetchTopics(topics: Array[FetchTopicRequest]) = {
-        def logging = {
-          val s: Array[String] = topics.map { s ⇒
-            s.topic + " : " + s.partitions.map { p ⇒
-              p.partition + ":" + p.offset
-            }.mkString(",")
-          }
-
-          log.info(s"send fetch request: ${s.mkString(",")}")
-        }
-
-        if(topics.size > 0) {
-          logging
-          sending(FetchRequest(topics = topics))
-        }
-      }
-
-      logFailedInfos
-      fetchTopics(fetchingTopics.filter(_.partitions.size > 0))
+    private def stopFetchers = {
+      fetchers.foreach(context.stop)
     }
 
     private def onOffsetFetched(offsets: OffsetFetchResponse) = {
       groups.foreach(_.update(offsets.topics))
 
-      //fetchMessages(offsets)
-      groups.foreach {
-        case g ⇒ g.toRequests.foreach {
-          case (node, req) ⇒
-            context.actorOf(FetchService.props(
-              remote   = cluster.getBroker(node).get,
-              clientId = clientId,
-              request  = req
-          ), "fetcher-"+node)
-        }
+      fetchers = groups.get.offsets.toArray.map {
+        case (node, off) ⇒
+          context.actorOf(FetchService.props(
+            nodeId   = node,
+            clientId = clientId,
+            offsets  = off
+        ), "fetcher-"+node)
       }
+
       stay
     }
 
@@ -278,9 +239,9 @@ object GroupCoordinator {
           topics     = msgs.toArray.map {
             case TopicMessages(topic, msgs) ⇒
               TopicOffsetCommitRequest(topic, msgs.toArray.map {
-                case PartitionMessages(partition, infos) ⇒
-                  log.info(s"commit partition = ${partition}, offset = ${infos.last.offset}")
-                  PartitionOffsetCommitRequest(partition, infos.last.offset)
+                case PartitionMessages(partition, _, infos) ⇒
+                  log.info(s"commit partition = ${partition}, offset = ${infos.get.last.offset}")
+                  PartitionOffsetCommitRequest(partition, infos.get.last.offset)
               })
           }))
 
@@ -288,21 +249,6 @@ object GroupCoordinator {
       }
 
       if(msgs.size > 0) sendCommit
-    }
-
-    private def decodeFetchedMsgs(msg: FetchResponse) = {
-      FetchedMessages.decode(0, msg)
-    }
-
-    private def onMessageFetched(msg: FetchResponse) = {
-      log.info("fetch response received")
-
-      val commits = decodeFetchedMsgs(msg)
-      // handle
-
-      autoCommit(commits.msgs)
-
-      stay
     }
 
     def onCommitted(commit: OffsetCommitResponse) = {
@@ -327,9 +273,11 @@ object GroupCoordinator {
     ////////////////////////////////////////////////////////////////////
     whenUnhandled {
       case Event(_: Terminated, Dummy) ⇒
+        stopFetchers
         goto(DISCONNECTED)
 
-      case Event(_, _) ⇒
+      case Event(e, _) ⇒
+        log.info(s"${e}")
         stay
     }
 
@@ -339,10 +287,14 @@ object GroupCoordinator {
 
 ///////////////////////////////////////////////////////////////////////
 class GroupCoordinator
-  ( val remote   : InetSocketAddress,
-    val clientId : String,
-    val groupId  : String,
-    val cluster  : KafkaCluster,
-    val topics   : Array[String] )
-  extends KafkaActor with GroupCoordinator.Actor with KafkaService
+  ( coordinator : Coordinator,
+    val clientId    : String,
+    val groupId     : String,
+    val cluster     : KafkaCluster,
+    val topics      : Array[String] )
+  extends KafkaActor with GroupCoordinator.Actor with PoolSinkChannel
+{
+  def path: String = "/user/push-service/cluster/broker-service/" + coordinator.nodeId
+  //val remote = new InetSocketAddress(coordinator.host, coordinator.port)
+}
 

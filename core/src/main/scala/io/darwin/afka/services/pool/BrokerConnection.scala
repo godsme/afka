@@ -1,10 +1,11 @@
-package io.darwin.afka.services
+package io.darwin.afka.services.pool
 
 import java.net.InetSocketAddress
 
 import akka.actor.{ActorRef, FSM, Props, Terminated}
 import akka.io.Tcp.ErrorClosed
 import io.darwin.afka.packets.requests.KafkaRequest
+import io.darwin.afka.services.common._
 
 import scala.concurrent.duration._
 
@@ -50,7 +51,11 @@ object BrokerConnection {
     }
 
     when(CONNECTED) {
-      case Event(RoutingEvent(r:RequestPacket), _) ⇒ handleRequest(r)
+      case Event(r:RequestPacket, _) ⇒ handleRequest(r)
+      case Event(e:KafkaRequest, _) ⇒ {
+        sending(e, sender)
+        stay
+      }
       case Event(InternalResp(r:ResponsePacket, from), _) ⇒ {
         from ! r
         stay
@@ -63,7 +68,7 @@ object BrokerConnection {
     }
 
     def handleRequest(request: RequestPacket) = {
-      send(request)
+      send(request, sender)
       stay
     }
 
