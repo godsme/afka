@@ -34,7 +34,7 @@ class PushService
   var consumer: ActorRef = null
 
   def startConsumer = {
-    consumer = context.actorOf(Consumer.props("darwin-group", Array("godsme-5", "godsme-6")), "consumer")
+    consumer = context.actorOf(Consumer.props(cluster, "darwin-group", Array("godsme-5", "godsme-6")), "consumer")
     context watch consumer
   }
 

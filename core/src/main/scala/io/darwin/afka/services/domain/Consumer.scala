@@ -1,80 +1,63 @@
 package io.darwin.afka.services.domain
 
-import akka.actor.{ActorRef, FSM, Props, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
+import akka.pattern._
+import akka.util.Timeout
 import io.darwin.afka.TopicId
 import io.darwin.afka.domain.KafkaCluster
-import io.darwin.afka.services.domain.MetaDataService.SessionMetaData
+import io.darwin.afka.packets.requests.{GroupCoordinateRequest, MetaDataRequest}
+import io.darwin.afka.packets.responses.{GroupCoordinateResponse, MetaDataResponse}
+import io.darwin.afka.services.common.ResponsePacket
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+import scala.util.Success
 
 /**
   * Created by darwin on 2/1/2017.
   */
 object Consumer {
-  def props( group  : String,
-             topics : Array[TopicId]) =  Props(classOf[Consumer], group, topics)
-
-  sealed trait State1
-  case object DISCONNECT   extends State1
-  case object CONNECTING   extends State1
-
-  sealed trait Data
-  case object Dummy extends Data
+  def props( cluster: ActorRef,
+             group  : String,
+             topics : Array[TopicId]) =
+    Props(classOf[Consumer], cluster, group, topics)
 }
 
-import io.darwin.afka.services.domain.Consumer._
+class Consumer(val cluster: ActorRef, val group: String, val topics: Array[TopicId])
+  extends Actor with ActorLogging {
 
-class Consumer(val group: String, val topics: Array[TopicId])
-  extends FSM[State1, Data] {
+  private var coordinator: Option[ActorRef] = None
 
-  startWith(DISCONNECT, Dummy)
+  implicit val timeout: Timeout = Timeout(10 second)
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  var metaFetcher: Option[ActorRef] = None
-  var coordinator: Option[ActorRef] = None
-
-  startMetaFetcher
-
-  def startMetaFetcher = {
-    metaFetcher = Some(context.actorOf(MetaDataService.props("", group, topics, self), "meta-data-fetcher"))
-    context watch metaFetcher.get
+  def onCoordinatorReceived(meta: MetaDataResponse, coord: GroupCoordinateResponse) = {
+    coordinator = Some(context.actorOf(GroupCoordinator.props(
+        coordinator   = coord.coordinator,
+        clientId = "",
+        groupId  = group,
+        cluster  = KafkaCluster(meta),
+        topics   = topics), "coordinator"))
+    context watch coordinator.get
   }
 
-  when(DISCONNECT) {
-    case Event(StateTimeout, _) ⇒
-      //context.actorSelection("/user/push-service/cluster") ! MetaDataRequest(Some(topics))
-      stay
-    case Event(SessionMetaData(meta, c), _) ⇒
-      coordinator =
-        Some(context.actorOf(GroupCoordinator.props(
-                    coordinator   = c,
-                    clientId = "",
-                    groupId  = group,
-                    cluster  = KafkaCluster(meta),
-                    topics   = topics), "coordinator"))
-      context watch coordinator.get
-      context unwatch metaFetcher.get
-      goto(CONNECTING)
-    case Event(_:Terminated, _) ⇒ {
-      stop
+  def onMetaDataReceived(meta: MetaDataResponse) = {
+    (cluster ? GroupCoordinateRequest(group)) andThen {
+      case Success(ResponsePacket(coord: GroupCoordinateResponse, _)) ⇒
+        onCoordinatorReceived(meta, coord)
+      case _ ⇒ context stop self
     }
   }
 
-  when(CONNECTING) {
-    case Event(_:Terminated, _) ⇒ {
-      stop
+  context.system.scheduler.scheduleOnce(1 second) {
+    (cluster ? MetaDataRequest(Some(topics))) andThen {
+      case Success(meta: MetaDataResponse) ⇒ onMetaDataReceived(meta)
+      case _ ⇒ context stop self
     }
-    case e ⇒
-      log.info(s"${e}")
-      stay
   }
 
-  whenUnhandled {
-    case Event(Unreachable(to, msg), _) ⇒ {
-      log.info(s"${to} unreachable, ${msg} is not delivered")
-      stop
-    }
-    case e ⇒
-      log.info(s"${e}")
-      stay()
+  override def receive = {
+    case Terminated(_) ⇒ context stop self
+    case e ⇒ log.info(s"${e}")
   }
-
-  initialize()
 }

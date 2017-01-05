@@ -106,21 +106,6 @@ object MetaDataService {
   }
 }
 
-//          context.actorOf( GroupCoordinator.props(
-//            coordinator   = co.coordinator,
-//            clientId = clientId,
-//            groupId  = groupId,
-//            cluster  = cluster.get,
-//            topics   = topics))
-
-//class MetaDataService
-//   ( val remote   : InetSocketAddress,
-//     val clientId : String,
-//     val groupId  : String,
-//     val topics   : Array[String],
-//     val listener : ActorRef)
-//  extends MetaDataService.Actor with KafkaService
-
 class MetaDataService
    ( val clientId : String,
      val groupId  : String,
