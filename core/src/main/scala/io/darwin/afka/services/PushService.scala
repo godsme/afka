@@ -2,7 +2,7 @@ package io.darwin.afka.services
 
 import java.net.InetSocketAddress
 
-import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
 import com.typesafe.config.ConfigFactory
 import io.darwin.afka.services.domain.Consumer
 import io.darwin.afka.services.pool.ClusterService
@@ -33,14 +33,21 @@ class PushService
 
   var consumer: ActorRef = null
 
+  def startConsumer = {
+    consumer = context.actorOf(Consumer.props("darwin-group", Array("godsme-5", "godsme-6")), "consumer")
+    context watch consumer
+  }
+
   override def receive: Receive = {
     case ClusterReady ⇒ {
       if(consumer == null) {
-        consumer = context.actorOf(Consumer.props("darwin-group", Array("godsme-3", "godsme-4")), "consumer")
-        context watch consumer
+        startConsumer
       }
     }
-
+    case Terminated(c) ⇒
+      if(c == consumer) {
+        startConsumer
+      }
     case e ⇒ log.info(s"event ${e} received ............")
   }
 }

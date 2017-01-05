@@ -1,13 +1,15 @@
 package io.darwin.afka.services.pool
 
 import akka.actor.{Actor, ActorRef, ActorSelection}
+import akka.contrib.pattern.ReceivePipeline
+import akka.contrib.pattern.ReceivePipeline.Inner
 import io.darwin.afka.packets.requests.KafkaRequest
-import io.darwin.afka.services.common.{ChannelConnected, KafkaActor, KafkaServiceSinkChannel, ResponsePacket}
+import io.darwin.afka.services.common.{ChannelConnected, KafkaServiceSinkChannel, ResponsePacket}
 
 /**
   * Created by darwin on 4/1/2017.
   */
-trait PoolSinkChannel extends KafkaActor with KafkaServiceSinkChannel {
+trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline {
   this: {
     def path: String
   } ⇒
@@ -20,14 +22,9 @@ trait PoolSinkChannel extends KafkaActor with KafkaServiceSinkChannel {
     target.fold { context.actorSelection(path) ! req } { to ⇒ to ! req }
   }
 
-  override def receive = {
+  pipelineOuter {
     case ResponsePacket(rsp, _) ⇒ {
-//      if(target.isEmpty) {
-//        target = Some(sender())
-//      }
-      super.receive(rsp)
+      Inner(rsp)
     }
-    case e ⇒ super.receive(e)
   }
-
 }

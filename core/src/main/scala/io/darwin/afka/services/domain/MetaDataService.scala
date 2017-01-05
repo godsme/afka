@@ -4,7 +4,7 @@ import akka.actor.FSM.Failure
 import akka.actor.{ActorRef, FSM, Props, Terminated}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.{Coordinator, GroupCoordinateResponse, KafkaErrorCode, MetaDataResponse}
-import io.darwin.afka.services.common.{ChannelConnected, KafkaActor, KafkaService, KafkaServiceSinkChannel}
+import io.darwin.afka.services.common.{ChannelConnected, KafkaService, KafkaServiceSinkChannel}
 import io.darwin.afka.services.pool.PoolSinkChannel
 
 import scala.concurrent.duration._
@@ -34,7 +34,7 @@ object MetaDataService {
 
   ///////////////////////////////////////////////////////////////
   trait Actor extends FSM[State, Data] {
-    this: KafkaActor with KafkaServiceSinkChannel {
+    this: KafkaServiceSinkChannel {
       val groupId  : String
       val topics   : Array[String]
       val listener : ActorRef
@@ -126,7 +126,7 @@ class MetaDataService
      val groupId  : String,
      val topics   : Array[String],
      val listener : ActorRef)
-  extends KafkaActor with MetaDataService.Actor with PoolSinkChannel {
+  extends MetaDataService.Actor with PoolSinkChannel {
 
   def path: String = "/user/push-service/cluster"
 }

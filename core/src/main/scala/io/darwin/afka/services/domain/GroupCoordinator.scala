@@ -93,7 +93,7 @@ object GroupCoordinator {
       }
     }
 
-    when(JOINED, stateTimeout = 8 second) {
+    when(JOINED, stateTimeout = 5 second) {
       case Event(StateTimeout, Dummy)                  ⇒ heartBeat
       case Event(offsets: OffsetFetchResponse, Dummy)  ⇒ onOffsetFetched(offsets)
       case Event(commit: OffsetCommitResponse, Dummy)  ⇒ onCommitted(commit)
@@ -101,6 +101,7 @@ object GroupCoordinator {
         r.error match {
           case KafkaErrorCode.NO_ERROR                 ⇒ stay
           case KafkaErrorCode.UNKNOWN_MEMBER_ID        ⇒ {
+            log.info(s"heart beat: code = ${r.error}")
             memberId = None
             joinGroup
           }
@@ -112,6 +113,9 @@ object GroupCoordinator {
 
           case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED |
                KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
+            suicide(s"heart beat failed: ${r.error}")
+          }
+          case _ ⇒ {
             suicide(s"heart beat failed: ${r.error}")
           }
         }
@@ -143,12 +147,35 @@ object GroupCoordinator {
           s"member = ${rsp.memberId}, " +
           s"members = ${rsp.members.getOrElse(Array.empty).mkString(",")}")
 
-      generation = rsp.generation
-      memberId = Some(rsp.memberId)
+      rsp.errorCode match {
+        case KafkaErrorCode.NO_ERROR ⇒ {
+          generation = rsp.generation
+          memberId = Some(rsp.memberId)
 
-      sending(sync(rsp))
+          sending(sync(rsp))
 
-      goto(PHASE2)
+          goto(PHASE2)
+        }
+        case KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP ⇒ {
+          log.error(s"@JoinGroupResponse: ${rsp.errorCode}, Kafka Server environment changed.")
+          stop
+        }
+        case KafkaErrorCode.ILLEGAL_GENERATION |
+             KafkaErrorCode.REBALANCE_IN_PROGRESS |
+             KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
+          log.info(s"@JoinGroupResponse: ${rsp.errorCode}")
+          joinGroup
+        }
+        case KafkaErrorCode.UNKNOWN_MEMBER_ID ⇒ {
+          log.info(s"@JoinGroupResponse: ${rsp.errorCode}")
+          memberId = None
+          joinGroup
+        }
+        case _ ⇒ {
+          suicide(s"@JoinGroupResponse: ${rsp.errorCode}")
+          joinGroup
+        }
+      }
     }
 
     private def sync(rsp: JoinGroupResponse) = {
@@ -275,7 +302,8 @@ object GroupCoordinator {
       case Event(_: Terminated, Dummy) ⇒
         stopFetchers
         goto(DISCONNECTED)
-
+      case Event(e: NotReady, _) ⇒
+        stop
       case Event(e, _) ⇒
         log.info(s"${e}")
         stay
@@ -292,7 +320,7 @@ class GroupCoordinator
     val groupId     : String,
     val cluster     : KafkaCluster,
     val topics      : Array[String] )
-  extends KafkaActor with GroupCoordinator.Actor with PoolSinkChannel
+  extends GroupCoordinator.Actor with PoolSinkChannel
 {
   def path: String = "/user/push-service/cluster/broker-service/" + coordinator.nodeId
   //val remote = new InetSocketAddress(coordinator.host, coordinator.port)

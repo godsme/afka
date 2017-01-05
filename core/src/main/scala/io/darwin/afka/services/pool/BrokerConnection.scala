@@ -91,6 +91,6 @@ class BrokerConnection
   ( val remote   : InetSocketAddress,
     val clientId : String,
     val listener : ActorRef )
-  extends KafkaActor with BrokerConnection.Actor with KafkaService
+  extends BrokerConnection.Actor with KafkaService
 
 

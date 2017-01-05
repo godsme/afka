@@ -45,7 +45,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
         if(cached.isEmpty) packet else cached.get ++ packet
       }
 
-      log.info(s"response received ${packet}")
+      //log.info(s"response received ${packet}")
 
       cached = Some(getCached(packet))
 
@@ -107,7 +107,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
       suicide(s"server ${remote} unreachable")
 
     case Connected(_, _)  ⇒
-      log.info(s"connected to ${remote}. ${sender().path.toString}")
+      //log.info(s"connected to ${remote}. ${sender().path.toString}")
 
       val connection = Some(sender())
       owner ! KafkaClientConnected(connection.get)

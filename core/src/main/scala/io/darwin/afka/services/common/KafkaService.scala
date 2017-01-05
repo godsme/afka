@@ -2,7 +2,9 @@ package io.darwin.afka.services.common
 
 import java.net.InetSocketAddress
 
-import akka.actor.{ActorLogging, ActorRef, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
+import akka.contrib.pattern.ReceivePipeline
+import akka.contrib.pattern.ReceivePipeline.{Delegation, HandledCompletely, Inner}
 import akka.io.Tcp.Write
 import akka.util.ByteString
 import io.darwin.afka.decoder.{KafkaDecoder, decode}
@@ -21,7 +23,7 @@ case class InternalResp(rsp: ResponsePacket, reply: ActorRef)
   * Created by darwin on 27/12/2016.
   */
 
-trait KafkaService extends KafkaActor with KafkaServiceSinkChannel with ActorLogging {
+trait KafkaService extends Actor with ActorLogging with KafkaServiceSinkChannel with ReceivePipeline {
   this: {
     val remote: InetSocketAddress
     val clientId: String
@@ -48,8 +50,13 @@ trait KafkaService extends KafkaActor with KafkaServiceSinkChannel with ActorLog
   private var pendingRequests: Map[Int,  (RequestPacket, ActorRef)] = Map.empty
 
   protected def doSend[A <: KafkaRequest](req: A) = {
-    lastCorrelationId += 1
-    socket.get ! Write(encode(req, lastCorrelationId, clientId))
+    if(socket.isDefined) {
+      lastCorrelationId += 1
+      socket.get ! Write(encode(req, lastCorrelationId, clientId))
+    }
+    else {
+      log.error(s"try to send event to a closed socket ${req}")
+    }
   }
 
   protected def send(request: RequestPacket, from: ActorRef) = {
@@ -61,9 +68,9 @@ trait KafkaService extends KafkaActor with KafkaServiceSinkChannel with ActorLog
     send(RequestPacket(req, from), from)
   }
 
-  private def decodeResponseBody(request: RequestPacket, data: ByteString, from: ActorRef): Unit = {
+  private def decodeResponseBody(request: RequestPacket, data: ByteString, from: ActorRef): Delegation = {
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      super.receive(InternalResp(ResponsePacket(decode[A](data), request), from))
+      Inner(InternalResp(ResponsePacket(decode[A](data), request), from))
     }
 
     val apiKey = request.request.apiKey
@@ -77,17 +84,18 @@ trait KafkaService extends KafkaActor with KafkaServiceSinkChannel with ActorLog
     else if(apiKey == OffsetCommitRequest.apiKey) decodeRsp[OffsetCommitResponse](data)
     else {
       log.warning(s"unknown event ${apiKey} received")
-      super.receive(data)
+      Inner(data)
     }
   }
 
-  private def decodeResponse(data: ByteString) = {
+  private def decodeResponse(data: ByteString): Delegation = {
     val id = data.iterator.getInt
     val req = pendingRequests.get(id)
 
     if(req.isEmpty) {
       log.error(s"the received correlation id ${id} != ${lastCorrelationId}")
       suicide
+      HandledCompletely
     }
     else {
       pendingRequests -= id
@@ -101,20 +109,16 @@ trait KafkaService extends KafkaActor with KafkaServiceSinkChannel with ActorLog
     socket = None
   }
 
-  override def receive: Receive = {
+  pipelineOuter {
     case c @ KafkaClientConnected(conn: ActorRef) ⇒ {
       socket = Some(conn)
-      super.receive(c)
-      context become {
-        case KafkaResponseData(data: ByteString) ⇒ decodeResponse(data)
-        case t@Terminated(_) ⇒ {
-          clientDead
-          super.receive(t)
-        }
-        case e ⇒ super.receive(e)
-      }
+      Inner(c)
     }
-    case e ⇒ super.receive(e)
+    case KafkaResponseData(data: ByteString) ⇒ decodeResponse(data)
+    case t@Terminated(_) ⇒ {
+      clientDead
+      Inner(t)
+    }
   }
 
   def closeConnection = {

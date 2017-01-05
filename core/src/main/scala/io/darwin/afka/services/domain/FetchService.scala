@@ -9,7 +9,7 @@ import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.{NodeOffsets, PartitionOffsetInfo}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
-import io.darwin.afka.services.common.{ChannelConnected, KafkaActor, KafkaClientConnected, KafkaService}
+import io.darwin.afka.services.common.{ChannelConnected, KafkaClientConnected, KafkaService}
 import io.darwin.afka.services.pool.PoolSinkChannel
 
 
@@ -25,7 +25,7 @@ object FetchService {
   }
 
 
-  trait Actor extends KafkaActor with ActorLogging {
+  trait Actor extends akka.actor.Actor with ActorLogging {
     this: PoolSinkChannel {
       val offsets: NodeOffsets
     } ⇒
@@ -58,6 +58,7 @@ object FetchService {
           }
         }
 
+        log.info("send fetch request")
         sending(offsets.toRequest)
       }
     }
@@ -68,7 +69,7 @@ class FetchService
   ( val nodeId     : NodeId,
     val clientId   : String,
     val offsets    : NodeOffsets)
-  extends KafkaActor with FetchService.Actor with PoolSinkChannel {
+  extends FetchService.Actor with PoolSinkChannel {
 
   def path: String = "/user/push-service/cluster/broker-service/" + nodeId
 }
