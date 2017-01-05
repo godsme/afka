@@ -46,21 +46,20 @@ class Consumer
 
   def onMetaDataReceived(meta: MetaDataResponse) = {
     (cluster ? GroupCoordinateRequest(group)) onComplete {
-      case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒
-        onCoordinatorReceived(meta, c.coordinator)
-      case _ ⇒ context stop self
+      case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒ onCoordinatorReceived(meta, c.coordinator)
+      case _                                                      ⇒ context stop self
     }
   }
 
   context.system.scheduler.scheduleOnce(1 second) {
     (cluster ? MetaDataRequest(Some(topics))) onComplete {
       case Success(meta: MetaDataResponse) ⇒ onMetaDataReceived(meta)
-      case _ ⇒ context stop self
+      case _                               ⇒ context stop self
     }
   }
 
   override def receive = {
     case Terminated(_) ⇒ context stop self
-    case e ⇒ log.info(s"${e}")
+    case e             ⇒ log.info(s"${e}")
   }
 }

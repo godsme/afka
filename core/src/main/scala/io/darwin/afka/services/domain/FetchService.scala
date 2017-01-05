@@ -1,15 +1,12 @@
 package io.darwin.afka.services.domain
 
-import java.net.InetSocketAddress
-
 import akka.actor.{ActorLogging, Props}
 import io.darwin.afka.NodeId
 import io.darwin.afka.domain.FetchedMessages
 import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.{NodeOffsets, PartitionOffsetInfo}
-import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
-import io.darwin.afka.services.common.{ChannelConnected, KafkaClientConnected, KafkaService}
+import io.darwin.afka.services.common.ChannelConnected
 import io.darwin.afka.services.pool.PoolSinkChannel
 
 

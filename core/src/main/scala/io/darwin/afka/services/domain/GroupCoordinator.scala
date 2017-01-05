@@ -1,15 +1,14 @@
 package io.darwin.afka.services.domain
 
-import java.net.InetSocketAddress
-
 import akka.actor.FSM.Failure
 import akka.actor.{ActorRef, FSM, Props, Terminated}
+import io.darwin.afka.SchemaException
 import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
 import io.darwin.afka.decoder.decode
 import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.GroupOffsets
-import io.darwin.afka.domain.{FetchedMessages, GroupOffsets, KafkaCluster}
+import io.darwin.afka.domain.{GroupOffsets, KafkaCluster}
 import io.darwin.afka.encoder.encode
 import io.darwin.afka.packets.common.{ProtoMemberAssignment, ProtoPartitionAssignment, ProtoSubscription}
 import io.darwin.afka.packets.requests._
@@ -64,13 +63,12 @@ object GroupCoordinator {
 
     startWith(CONNECTING, Dummy)
 
-
     when(DISCONNECTED, stateTimeout = 60 second) {
-      case Event(StateTimeout, Dummy) ⇒ goto(CONNECTING)
+      case Event(StateTimeout, Dummy)            ⇒ goto(CONNECTING)
     }
 
     when(CONNECTING, stateTimeout = 60 second) {
-      case Event(ChannelConnected, Dummy) ⇒ joinGroup
+      case Event(ChannelConnected, Dummy)        ⇒ joinGroup
     }
 
     when(PHASE1) {
@@ -78,48 +76,14 @@ object GroupCoordinator {
     }
 
     when(PHASE2) {
-      case Event(r: SyncGroupResponse, Dummy) ⇒ {
-        r.error match {
-          case KafkaErrorCode.NO_ERROR               ⇒ onSync(r)
-          case KafkaErrorCode.UNKNOWN_MEMBER_ID  |
-               KafkaErrorCode.ILLEGAL_GENERATION |
-               KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ joinGroup
-
-          // case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒
-          // case KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP ⇒
-          // case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED ⇒
-          case e ⇒ suicide(s"SyncGroup failed: ${e}")
-        }
-      }
+      case Event(r: SyncGroupResponse, Dummy)    ⇒ onResult(r.error, "SyncGroup")(onSync(r))
     }
 
     when(JOINED, stateTimeout = 5 second) {
       case Event(StateTimeout, Dummy)                  ⇒ heartBeat
       case Event(offsets: OffsetFetchResponse, Dummy)  ⇒ onOffsetFetched(offsets)
       case Event(commit: OffsetCommitResponse, Dummy)  ⇒ onCommitted(commit)
-      case Event(r: HeartBeatResponse, Dummy) ⇒ {
-        r.error match {
-          case KafkaErrorCode.NO_ERROR                 ⇒ stay
-          case KafkaErrorCode.UNKNOWN_MEMBER_ID        ⇒ {
-            log.info(s"heart beat: code = ${r.error}")
-            memberId = None
-            joinGroup
-          }
-          case KafkaErrorCode.REBALANCE_IN_PROGRESS  |
-               KafkaErrorCode.ILLEGAL_GENERATION       ⇒ {
-            log.info(s"heart beat: code = ${r.error}")
-            joinGroup
-          }
-
-          case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED |
-               KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
-            suicide(s"heart beat failed: ${r.error}")
-          }
-          case _ ⇒ {
-            suicide(s"heart beat failed: ${r.error}")
-          }
-        }
-      }
+      case Event(r: HeartBeatResponse, Dummy)          ⇒ onResult(r.error, "HeartBeat")(stay)
     }
 
     /////////////////////////////////////////////////////////////////
@@ -139,6 +103,15 @@ object GroupCoordinator {
     }
 
     private def onJoined(rsp: JoinGroupResponse) = {
+      def onSuccess = {
+          generation = rsp.generation
+          memberId = Some(rsp.memberId)
+
+          sending(sync(rsp))
+
+          goto(PHASE2)
+      }
+
       log.info(
         s"error = ${rsp.errorCode}, " +
           s"generation = ${rsp.generation}, " +
@@ -147,46 +120,18 @@ object GroupCoordinator {
           s"member = ${rsp.memberId}, " +
           s"members = ${rsp.members.getOrElse(Array.empty).mkString(",")}")
 
-      rsp.errorCode match {
-        case KafkaErrorCode.NO_ERROR ⇒ {
-          generation = rsp.generation
-          memberId = Some(rsp.memberId)
-
-          sending(sync(rsp))
-
-          goto(PHASE2)
-        }
-        case KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP ⇒ {
-          log.error(s"@JoinGroupResponse: ${rsp.errorCode}, Kafka Server environment changed.")
-          stop
-        }
-        case KafkaErrorCode.ILLEGAL_GENERATION |
-             KafkaErrorCode.REBALANCE_IN_PROGRESS |
-             KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
-          log.info(s"@JoinGroupResponse: ${rsp.errorCode}")
-          joinGroup
-        }
-        case KafkaErrorCode.UNKNOWN_MEMBER_ID ⇒ {
-          log.info(s"@JoinGroupResponse: ${rsp.errorCode}")
-          memberId = None
-          joinGroup
-        }
-        case _ ⇒ {
-          suicide(s"@JoinGroupResponse: ${rsp.errorCode}")
-          joinGroup
-        }
-      }
+      onResult(rsp.errorCode, "JoinGroup")(onSuccess)
     }
 
     private def sync(rsp: JoinGroupResponse) = {
       def syncAsLeader = {
-        val subscription = rsp.members.get.map {
-          case GroupMember(id, meta) ⇒
-            MemberSubscription(id, decode[ProtoSubscription](meta))
+        val subscription = rsp.members.get.map { case GroupMember(id, meta) ⇒
+          MemberSubscription(id, decode[ProtoSubscription](meta))
         }
 
-        val memberAssignment = assigner.assign(cluster, subscription).toArray.map {
-          case (member, assignments) ⇒
+        val memberAssignment = assigner
+          .assign(cluster, subscription).toArray
+          .map { case (member, assignments) ⇒
             GroupAssignment(
               member     = member,
               assignment = encode(ProtoMemberAssignment(topics = assignments.toArray)))
@@ -195,36 +140,34 @@ object GroupCoordinator {
         SyncGroupRequest(groupId, generation, rsp.memberId, memberAssignment)
       }
 
-      def syncAsFollower = {
-        SyncGroupRequest(groupId, generation, rsp.memberId)
-      }
-
       if(rsp.leaderId == rsp.memberId) syncAsLeader
-      else syncAsFollower
+      else SyncGroupRequest(groupId, generation, rsp.memberId)
     }
 
     var groups: Option[GroupOffsets] = None
 
     private def onSync(r: SyncGroupResponse) = {
-      groups = r.assignment.map {
-        case p ⇒ new GroupOffsets.GroupOffsets(cluster, p.topics)
+      groups = r.assignment.map { case p ⇒
+        new GroupOffsets(cluster, p.topics)
       }
 
       def logMsg = {
-        r.assignment.get.topics.foreach {
-          case ProtoPartitionAssignment(topic, partitions) ⇒
+        r.assignment.map { s ⇒
+          s.topics.foreach { case ProtoPartitionAssignment(topic, partitions) ⇒
             log.info(s"topic=${topic}, partitions={${partitions.mkString(", ")}}")
+          }
         }
       }
 
       def fetchOffset = {
         logMsg
 
-        sending(OffsetFetchRequest(
-          group  = groupId,
-          topics = r.assignment.get.topics))
-
-        goto(JOINED)
+        r.assignment.fold(throw SchemaException("inconsistancy")) { s ⇒
+          sending(OffsetFetchRequest(
+            group  = groupId,
+            topics = s.topics))
+          goto(JOINED)
+        }
       }
 
       r.error match {
@@ -238,39 +181,41 @@ object GroupCoordinator {
 
     var fetchers: Array[ActorRef] = Array.empty
 
-    private def stopFetchers = {
-      fetchers.foreach(context.stop)
-    }
+    private def stopFetchers = fetchers.foreach(context.stop)
 
     private def onOffsetFetched(offsets: OffsetFetchResponse) = {
       groups.foreach(_.update(offsets.topics))
 
-      fetchers = groups.get.offsets.toArray.map {
-        case (node, off) ⇒
-          context.actorOf(FetchService.props(
+      fetchers = groups.get.offsets.toArray.map { case (node, off) ⇒
+        context.actorOf(FetchService.props(
             nodeId   = node,
             clientId = clientId,
-            offsets  = off
-        ), "fetcher-"+node)
+            offsets  = off ),
+          "fetcher-"+node)
       }
 
       stay
     }
 
     def autoCommit(msgs: MutableList[TopicMessages]) = {
+      def getPartitions(p: MutableList[PartitionMessages]) =
+        p.toArray.map { case PartitionMessages(partition, _, Some(info)) ⇒
+          PartitionOffsetCommitRequest(partition, info.last.offset)
+        }
+
+      val getTopics =
+        msgs.toArray.map { case TopicMessages(topic, m) ⇒
+          TopicOffsetCommitRequest(
+            topic      = topic,
+            partitions = getPartitions(m))
+          }
+
       def sendCommit = {
         sending(OffsetCommitRequest(
           groupId    = groupId,
           generation = generation,
           consumerId = memberId.get,
-          topics     = msgs.toArray.map {
-            case TopicMessages(topic, msgs) ⇒
-              TopicOffsetCommitRequest(topic, msgs.toArray.map {
-                case PartitionMessages(partition, _, infos) ⇒
-                  log.info(s"commit partition = ${partition}, offset = ${infos.get.last.offset}")
-                  PartitionOffsetCommitRequest(partition, infos.get.last.offset)
-              })
-          }))
+          topics     = getTopics ))
 
         stay
       }
@@ -282,9 +227,8 @@ object GroupCoordinator {
       commit.topics.foreach {
         case OffsetCommitTopicResponse(topic, partitions) ⇒
           log.info(s"commit topic: ${topic}")
-          partitions.foreach {
-            case OffsetCommitPartitionResponse(partition, error) ⇒
-              log.info(s"partition = ${partition}, error=${error}")
+          partitions.foreach { case OffsetCommitPartitionResponse(partition, error) ⇒
+            log.info(s"partition = ${partition}, error=${error}")
           }
       }
 
@@ -296,6 +240,21 @@ object GroupCoordinator {
       stay
     }
 
+    def onResult(error: Short, on: String)(success: ⇒ State): State = {
+      error match {
+        case KafkaErrorCode.NO_ERROR               ⇒ success
+        case KafkaErrorCode.UNKNOWN_MEMBER_ID      ⇒ { memberId = None; joinGroup}
+
+        case KafkaErrorCode.ILLEGAL_GENERATION |
+             KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ joinGroup
+
+        case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE |
+             KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP          ⇒ suicide(error.toString)
+
+        case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED         ⇒ suicide(error.toString)
+        case e ⇒ suicide(s"${on} failed: ${e}")
+      }
+    }
 
     ////////////////////////////////////////////////////////////////////
     whenUnhandled {
@@ -320,9 +279,7 @@ class GroupCoordinator
     val groupId     : String,
     val cluster     : KafkaCluster,
     val topics      : Array[String] )
-  extends GroupCoordinator.Actor with PoolSinkChannel
-{
+  extends GroupCoordinator.Actor with PoolSinkChannel {
   def path: String = "/user/push-service/cluster/broker-service/" + coordinator.nodeId
-  //val remote = new InetSocketAddress(coordinator.host, coordinator.port)
 }
 
