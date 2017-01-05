@@ -28,7 +28,7 @@ import scala.concurrent.duration._
 object GroupCoordinator {
 
   def props( coordinator : Coordinator,
-             clientId    : String,
+             clientId    : String = "",
              groupId     : String,
              cluster     : KafkaCluster,
              topics      : Array[String] ) = {

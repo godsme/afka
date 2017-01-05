@@ -24,7 +24,6 @@ object FetchService {
     Props(classOf[FetchService], nodeId, clientId, offsets)
   }
 
-
   trait Actor extends akka.actor.Actor with ActorLogging {
     this: PoolSinkChannel {
       val offsets: NodeOffsets

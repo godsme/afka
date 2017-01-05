@@ -6,7 +6,7 @@ import akka.util.Timeout
 import io.darwin.afka.TopicId
 import io.darwin.afka.domain.KafkaCluster
 import io.darwin.afka.packets.requests.{GroupCoordinateRequest, MetaDataRequest}
-import io.darwin.afka.packets.responses.{GroupCoordinateResponse, MetaDataResponse}
+import io.darwin.afka.packets.responses.{Coordinator, GroupCoordinateResponse, MetaDataResponse}
 import io.darwin.afka.services.common.ResponsePacket
 
 import scala.concurrent.ExecutionContext
@@ -23,7 +23,10 @@ object Consumer {
     Props(classOf[Consumer], cluster, group, topics)
 }
 
-class Consumer(val cluster: ActorRef, val group: String, val topics: Array[TopicId])
+class Consumer
+  ( val cluster : ActorRef,
+    val group   : String,
+    val topics  : Array[TopicId])
   extends Actor with ActorLogging {
 
   private var coordinator: Option[ActorRef] = None
@@ -31,26 +34,26 @@ class Consumer(val cluster: ActorRef, val group: String, val topics: Array[Topic
   implicit val timeout: Timeout = Timeout(10 second)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  def onCoordinatorReceived(meta: MetaDataResponse, coord: GroupCoordinateResponse) = {
+  def onCoordinatorReceived(meta: MetaDataResponse, c: Coordinator) = {
     coordinator = Some(context.actorOf(GroupCoordinator.props(
-        coordinator   = coord.coordinator,
-        clientId = "",
-        groupId  = group,
-        cluster  = KafkaCluster(meta),
-        topics   = topics), "coordinator"))
+        coordinator   = c,
+        groupId       = group,
+        cluster       = KafkaCluster(meta),
+        topics        = topics),
+      "coordinator"))
     context watch coordinator.get
   }
 
   def onMetaDataReceived(meta: MetaDataResponse) = {
-    (cluster ? GroupCoordinateRequest(group)) andThen {
-      case Success(ResponsePacket(coord: GroupCoordinateResponse, _)) ⇒
-        onCoordinatorReceived(meta, coord)
+    (cluster ? GroupCoordinateRequest(group)) onComplete {
+      case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒
+        onCoordinatorReceived(meta, c.coordinator)
       case _ ⇒ context stop self
     }
   }
 
   context.system.scheduler.scheduleOnce(1 second) {
-    (cluster ? MetaDataRequest(Some(topics))) andThen {
+    (cluster ? MetaDataRequest(Some(topics))) onComplete {
       case Success(meta: MetaDataResponse) ⇒ onMetaDataReceived(meta)
       case _ ⇒ context stop self
     }
