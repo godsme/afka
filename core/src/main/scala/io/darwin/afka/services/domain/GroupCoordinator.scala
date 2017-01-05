@@ -18,7 +18,14 @@ import io.darwin.afka.services.pool.PoolSinkChannel
 
 import scala.collection.mutable.MutableList
 import scala.concurrent.duration._
+import scala.collection.mutable.Map
+import akka.pattern._
+import akka.util.Timeout
 
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.util.Success
 /**
   * Created by darwin on 26/12/2016.
   */
@@ -38,6 +45,7 @@ object GroupCoordinator {
   case object DISCONNECTED extends State
   case object CONNECTING   extends State
   case object PHASE1       extends State
+  case object ASSIGN       extends State
   case object PHASE2       extends State
   case object JOINED       extends State
 
@@ -73,6 +81,10 @@ object GroupCoordinator {
 
     when(PHASE1) {
       case Event(r: JoinGroupResponse, Dummy)    ⇒ onJoined(r)
+    }
+
+    when(ASSIGN) {
+      case Event(r: MetaDataResponse, Dummy) ⇒ onMetaDataReceived(r)
     }
 
     when(PHASE2) {
@@ -111,9 +123,7 @@ object GroupCoordinator {
           generation = rsp.generation
           memberId = Some(rsp.memberId)
 
-          sending(sync(rsp))
-
-          goto(PHASE2)
+        sync(rsp)
       }
 
       log.info(
@@ -129,25 +139,50 @@ object GroupCoordinator {
       onResult(rsp.errorCode, "JoinGroup")(onSuccess)
     }
 
-    private def sync(rsp: JoinGroupResponse) = {
-      def syncAsLeader = {
-        val subscription = rsp.members.get.map { case GroupMember(id, meta) ⇒
-          MemberSubscription(id, decode[ProtoSubscription](meta))
-        }
+    var subscription: Array[MemberSubscription] = null
 
-        val memberAssignment = assigner
-          .assign(cluster, subscription).toArray
+    private def onMetaDataReceived(r: MetaDataResponse) = {
+      val memberAssignment =
+        assigner
+          .assign(KafkaCluster(r), subscription).toArray
           .map { case (member, assignments) ⇒
             GroupAssignment(
               member     = member,
               assignment = encode(ProtoMemberAssignment(topics = assignments.toArray)))
+          }
+
+      sending(SyncGroupRequest(groupId, generation, memberId.get, memberAssignment))
+      goto(PHASE2)
+    }
+
+    private def sync(rsp: JoinGroupResponse) = {
+      def syncAsLeader = {
+
+        subscription = rsp.members.get.map { case GroupMember(id, meta) ⇒
+            MemberSubscription(id, decode[ProtoSubscription](meta))
+          }
+
+        val topicMap: Map[String, String] = Map.empty
+
+        subscription.foreach { s ⇒
+          s.subscriptions.topics.foreach { topic ⇒
+            topicMap.getOrElseUpdate(topic, topic)
+          }
         }
 
-        SyncGroupRequest(groupId, generation, rsp.memberId, memberAssignment)
+        val topics = topicMap.toArray.map{case (k, v) ⇒ k}
+
+        context.actorSelection("/user/push-service/cluster") ! MetaDataRequest(Some(topics))
       }
 
-      if(rsp.leaderId == rsp.memberId) syncAsLeader
-      else SyncGroupRequest(groupId, generation, rsp.memberId)
+      if(rsp.leaderId == rsp.memberId) {
+        syncAsLeader
+        goto(ASSIGN)
+      }
+      else {
+        sending(SyncGroupRequest(groupId, generation, rsp.memberId))
+        goto(PHASE2)
+      }
     }
 
     var groups: Option[GroupOffsets] = None

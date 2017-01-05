@@ -10,7 +10,6 @@ import io.darwin.afka.packets.responses._
 import io.darwin.afka.services.common.ResponsePacket
 import io.darwin.afka.services.pool.ClusterService.ClusterChanged
 
-import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Success

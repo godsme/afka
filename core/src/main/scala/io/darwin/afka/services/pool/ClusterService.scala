@@ -31,7 +31,6 @@ object ClusterService {
   case object Dummy extends Data
 
   case class  CreateConsumer(groupId: String, topics: Array[TopicId])
-  case object ClusterReady
   final case class  ClusterChanged()
 }
 
@@ -75,26 +74,35 @@ class ClusterService(val clusterId  : String,
     }
   }
 
-  when(READY) {
-    case Event(WorkerOnline, Dummy) ⇒ {
-      log.info(s"custer ${clusterId} is ready!")
-      listener ! ClusterReady
 
+
+  private def publishClusterReady = {
+    def startMetaFetcher = {
       if(metaFetcher.isEmpty) {
         import ExecutionContext.Implicits.global
         metaFetcher = Some(context.system.scheduler.schedule(0 milli, 5 second)(send(MetaDataRequest(), self)))
       }
-      else{
-        log.info("PUBLISH")
-        try {
-          context.system.eventStream.publish(ClusterChanged())
-        }
-        catch {
-          case _: NoSuchElementException ⇒
-            log.warning("no one subscribed this event")
-          case e ⇒ throw e
-        }
+    }
+
+    def publish = {
+      log.info("PUBLISH")
+      try {
+        context.system.eventStream.publish(ClusterChanged())
       }
+      catch {
+        case _: NoSuchElementException ⇒ log.warning("no one subscribed this event")
+        case e ⇒ throw e
+      }
+    }
+
+    startMetaFetcher
+    publish
+  }
+
+  when(READY) {
+    case Event(WorkerOnline, Dummy) ⇒ {
+      log.info(s"custer ${clusterId} is ready!")
+      publishClusterReady
 
       stay
     }
@@ -114,8 +122,6 @@ class ClusterService(val clusterId  : String,
         log.info("new brokers are different")
         brokers = newBrokers
         connection.foreach(_ ! brokers)
-
-
       }
 
       if(req.who != self) {
