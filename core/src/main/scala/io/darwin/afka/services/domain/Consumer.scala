@@ -31,8 +31,7 @@ class Consumer
 
   private var coordinator: Option[ActorRef] = None
 
-  implicit val timeout: Timeout = Timeout(10 second)
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
+  import ExecutionContext.Implicits.global
 
   def onCoordinatorReceived(meta: MetaDataResponse, c: Coordinator) = {
     coordinator = Some(context.actorOf(GroupCoordinator.props(
@@ -41,10 +40,12 @@ class Consumer
         cluster       = KafkaCluster(meta),
         topics        = topics),
       "coordinator"))
-    context watch coordinator.get
+
+    coordinator.map(context watch)
   }
 
   def onMetaDataReceived(meta: MetaDataResponse) = {
+    implicit val timeout: Timeout = Timeout(1 second)
     (cluster ? GroupCoordinateRequest(group)) onComplete {
       case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒ onCoordinatorReceived(meta, c.coordinator)
       case _                                                      ⇒ context stop self
@@ -52,6 +53,7 @@ class Consumer
   }
 
   context.system.scheduler.scheduleOnce(1 second) {
+    implicit val timeout: Timeout = Timeout(10 second)
     (cluster ? MetaDataRequest(Some(topics))) onComplete {
       case Success(meta: MetaDataResponse) ⇒ onMetaDataReceived(meta)
       case _                               ⇒ context stop self

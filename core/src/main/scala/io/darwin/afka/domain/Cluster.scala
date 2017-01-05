@@ -37,7 +37,12 @@ object KafkaPartition {
 
 ////////////////////////////////////////////////////////////////////
 object KafkaTopic {
-  def apply(v: TopicMetaData) = new KafkaTopic(v.topic, v.partitions.map(KafkaPartition(_)))
+  def apply(v: TopicMetaData) =
+    new KafkaTopic(
+      v.topic,
+      v.partitions
+        .filter(_.leader >= 0) // when the leader of the partition is offline, leader = -1
+        .map(KafkaPartition(_)))
 
   type PartitionMap = Map[PartitionId, KafkaPartition]
 }
@@ -51,12 +56,10 @@ class KafkaTopic( val id         : String,
 
   def toPartitionMap = partitionMap
 
-  partitions.foreach { partition ⇒
-    partitionMap += partition.id → partition
-  }
+  partitions
+    .filter(_.leader >= 0)
+    .foreach { p ⇒ partitionMap += p.id → p }
 }
-
-
 
 ////////////////////////////////////////////////////////////////////
 class KafkaCluster( val brokers : Map[Int, KafkaBroker],
@@ -97,8 +100,8 @@ object KafkaCluster {
     var topics: Map[String, KafkaTopic] = Map.empty
 
     meta.topics
-      .filter { t ⇒ !t.isInternal && t.errorCode == 0 }
-      .foreach{ t ⇒ topics += t.topic → KafkaTopic(t) }
+      .filter  { t ⇒ !t.isInternal && t.errorCode == 0 }
+      .foreach { t ⇒ topics += t.topic → KafkaTopic(t) }
 
     topics
   }

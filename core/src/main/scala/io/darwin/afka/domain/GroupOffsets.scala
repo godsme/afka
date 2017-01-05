@@ -117,17 +117,16 @@ object GroupOffsets {
 
     group.foreach {
       case ProtoPartitionAssignment(topic, partitions) ⇒
-        // FIXME: if topic can't be found in meta data, inconsistency occurred.
-        val partitionMap: Option[KafkaTopic.PartitionMap] = cluster.getPartitionMapByTopic(topic)
-        //cluster.getPartitionMapByTopic(topic).getOrElse(Map.empty)
-
-        if(partitionMap.isDefined) {
-          partitions.foreach { p ⇒
-            // FIXME: partitionMap(p) might throw exceptions if p does not exist.
-            val node: Int = partitionMap.get(p).leader
-            addNode(node).addTopic(topic).addPartition(p)
+        cluster
+          .getPartitionMapByTopic(topic)
+          .foreach { map ⇒
+            partitions.foreach { pid ⇒
+              map.get(pid).foreach { p ⇒
+                addNode(p.leader).addTopic(topic).addPartition(pid)
+              }
+            }
           }
-        }
+
     }
 
     println(cluster.toString)
