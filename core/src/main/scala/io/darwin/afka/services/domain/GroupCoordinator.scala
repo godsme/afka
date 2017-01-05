@@ -68,7 +68,7 @@ object GroupCoordinator {
     }
 
     when(CONNECTING, stateTimeout = 60 second) {
-      case Event(ChannelConnected, Dummy)        ⇒ joinGroup
+      case Event(ChannelConnected, Dummy)        ⇒ joinGroup(0, "Initial")
     }
 
     when(PHASE1) {
@@ -89,7 +89,11 @@ object GroupCoordinator {
     /////////////////////////////////////////////////////////////////
     val assigner = new RangeAssignor
 
-    private def joinGroup: State = {
+    private def joinGroup(cause: Short, on: String): State = {
+      if(cause != KafkaErrorCode.NO_ERROR) {
+        log.info(s"re-jion group when ${on}, cause=${cause}")
+      }
+
       stopFetchers
 
       sending(JoinGroupRequest(
@@ -113,12 +117,14 @@ object GroupCoordinator {
       }
 
       log.info(
-        s"error = ${rsp.errorCode}, " +
+        s"error = ${rsp.errorCode}, " + s"${sender()}" +
           s"generation = ${rsp.generation}, " +
           s"proto = ${rsp.groupProtocol}, " +
           s"leader = ${rsp.leaderId}, " +
           s"member = ${rsp.memberId}, " +
           s"members = ${rsp.members.getOrElse(Array.empty).mkString(",")}")
+
+
 
       onResult(rsp.errorCode, "JoinGroup")(onSuccess)
     }
@@ -162,21 +168,16 @@ object GroupCoordinator {
       def fetchOffset = {
         logMsg
 
-        r.assignment.fold(throw SchemaException("inconsistancy")) { s ⇒
+        r.assignment.fold(()) { s ⇒
           sending(OffsetFetchRequest(
             group  = groupId,
             topics = s.topics))
-          goto(JOINED)
         }
+
+        goto(JOINED)
       }
 
-      r.error match {
-        case KafkaErrorCode.NO_ERROR ⇒ fetchOffset
-        case e ⇒ {
-          log.error(s"sync group failed ${e}")
-          joinGroup
-        }
-      }
+      onResult(r.error, "@SyncGroup")(fetchOffset)
     }
 
     var fetchers: Array[ActorRef] = Array.empty
@@ -243,10 +244,10 @@ object GroupCoordinator {
     def onResult(error: Short, on: String)(success: ⇒ State): State = {
       error match {
         case KafkaErrorCode.NO_ERROR               ⇒ success
-        case KafkaErrorCode.UNKNOWN_MEMBER_ID      ⇒ { memberId = None; joinGroup}
+        case KafkaErrorCode.UNKNOWN_MEMBER_ID      ⇒ { memberId = None; joinGroup(error, on)}
 
         case KafkaErrorCode.ILLEGAL_GENERATION |
-             KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ joinGroup
+             KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ joinGroup(error, on)
 
         case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE |
              KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP          ⇒ suicide(error.toString)
@@ -263,6 +264,10 @@ object GroupCoordinator {
         goto(DISCONNECTED)
       case Event(e: NotReady, _) ⇒
         stop
+      case Event(_:Unreachable, _) ⇒ {
+        log.error("connection to coordinator server lost")
+        stop
+      }
       case Event(e, _) ⇒
         log.info(s"${e}")
         stay

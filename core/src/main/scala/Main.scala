@@ -10,7 +10,7 @@ object Main extends App {
   implicit val ec = system.dispatcher
 
   val bootstrap = system.actorOf(Props[PushService],"push-service")
-  //val deadLetter = system.actorOf(Props[DeadLetterListener], "dead-letter")
+  val deadLetter = system.actorOf(Props[DeadLetterListener], "dead-letter")
 
   //  val metaService = system.actorOf( MetaDataService.props
 //      ( remote   = new InetSocketAddress(host, port),
