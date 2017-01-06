@@ -88,19 +88,21 @@ object GroupCoordinator {
     }
 
     when(ASSIGN) {
-      case Event(r: MetaDataResponse, Subscrition(sub)) ⇒ onMetaDataReceived(r, sub)
+      case Event(r: MetaDataResponse, Subscrition(sub)) ⇒
+        onMetaDataReceived(r, sub)
     }
 
     when(PHASE2) {
-      case Event(r: SyncGroupResponse, Dummy)    ⇒ onResult(r.error, "SyncGroup")(onSync(r))
+      case Event(r: SyncGroupResponse, Dummy)    ⇒
+        onResult(r.error, "SyncGroup")(onSync(r))
     }
 
     var heartbeatAck = true
     when(JOINED, stateTimeout = 5 second) {
-      case Event(StateTimeout, Dummy)                  ⇒ heartBeat
-      case Event(offsets: OffsetFetchResponse, Dummy)  ⇒ onOffsetFetched(offsets)
-      case Event(commit: OffsetCommitResponse, Dummy)  ⇒ onCommitted(commit)
-      case Event(r: HeartBeatResponse, Dummy)          ⇒
+      case Event(StateTimeout, Dummy)            ⇒ heartBeat
+      case Event(r: OffsetFetchResponse, Dummy)  ⇒ onOffsetFetched(r)
+      case Event(r: OffsetCommitResponse, Dummy) ⇒ onCommitted(r)
+      case Event(r: HeartBeatResponse, Dummy)    ⇒
         heartbeatAck = true
         onResult(r.error, "HeartBeat")(stay)
     }
@@ -109,7 +111,6 @@ object GroupCoordinator {
     val assigner = new RangeAssignor
 
     private def sendJoinRequest = {
-      log.info("send joinGroup request")
       sending(JoinGroupRequest(
         groupId = groupId,
         memberId = memberId.getOrElse(""),
@@ -128,7 +129,7 @@ object GroupCoordinator {
 
       stopFetchers
       sendJoinRequest
-      goto(PHASE1)
+      goto(PHASE1) using(Dummy)
     }
 
     private def onJoined(rsp: JoinGroupResponse) = {
@@ -239,8 +240,9 @@ object GroupCoordinator {
       groups.foreach(_.update(offsets.topics))
 
       fetchers = groups.get.offsets.toArray.map { case (node, off) ⇒
+
         context.actorOf(FetchService.props(
-            nodeId   = node,
+            channel  = cluster.getBroker(node).get,
             clientId = clientId,
             offsets  = off ),
           "fetcher-"+node)

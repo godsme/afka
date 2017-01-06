@@ -16,7 +16,7 @@ case class GroupProtocol
 case class JoinGroupRequest
   ( groupId:          String,
     sessionTimeout:   Int = 60000,
-    rebalanceTimeout: Int = 10000,
+    rebalanceTimeout: Int = 30000,
     memberId:         String = "",
     protocolType:     String = "consumer",
     protocols:        Array[GroupProtocol])

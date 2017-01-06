@@ -37,26 +37,26 @@ class PushService
 
   var consumers: Map[Int, ActorRef] = Map.empty
 
+  val groups: Array[String] = Array("darwin-group", "godsme-group", "afka-group")
+
   def startConsumer(i: Int) = {
     val consumer = context.actorOf(Consumer.props(
-      cluster, "darwin-group", Array(s"godsme-${i}", s"godsme-${i+1}")), i.toString)
+      cluster, groups(i/10), Array(s"godsme-${i}", s"godsme-${i+1}")), i.toString)
     context watch consumer
 
     consumers += i → consumer
   }
 
   def startConsumers = {
-    for(i ← 0 until 10) {
+    for(i ← 0 until 20)
       startConsumer(i)
-    }
   }
 
   override def receive: Receive = {
-    case ClusterChanged() ⇒ {
-      if(consumers.isEmpty) {
+    case ClusterChanged() ⇒
+      if(consumers.isEmpty)
         startConsumers
-      }
-    }
+
     case Terminated(c) ⇒
       consumers -= c.path.name.toInt
       startConsumer(c.path.name.toInt)

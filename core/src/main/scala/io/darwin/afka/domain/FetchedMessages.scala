@@ -35,7 +35,7 @@ object FetchedMessages {
           case e: NoSuchElementException ⇒ ()
         }
       }
-      //println(s"${partition}: # of msgs = ${partitionMsgs.size}")
+      println(s"${partition}: # of msgs = ${partitionMsgs.size}")
       partitionMsgs
     }
 

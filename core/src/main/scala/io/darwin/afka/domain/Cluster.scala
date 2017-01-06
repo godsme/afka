@@ -4,6 +4,7 @@ import java.net.InetSocketAddress
 
 import io.darwin.afka.PartitionId
 import io.darwin.afka.packets.responses.{BrokerResponse, MetaDataResponse, PartitionMetaData, TopicMetaData}
+import io.darwin.afka.services.common.ChannelAddress
 
 /**
   * Created by darwin on 27/12/2016.
@@ -73,8 +74,8 @@ class KafkaCluster( val brokers : Map[Int, KafkaBroker],
     topics.get(topic).map(_.toPartitionMap)
   }
 
-  def getBroker(id: Int): Option[InetSocketAddress] = {
-    brokers.get(id).map(_.addr)
+  def getBroker(id: Int): Option[ChannelAddress] = {
+    brokers.get(id).map(p ⇒ ChannelAddress(id, p.addr.getHostName, p.addr.getPort))
   }
 
   override val toString = {
