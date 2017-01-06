@@ -24,7 +24,7 @@ class BrokerMaster( val remote   : InetSocketAddress,
                     val listener : ActorRef)
   extends AfkaRouter {
 
-  def numOfWorkers: Int = 4
+  def numOfWorkers: Int = 2
 
   def routingLogic: RoutingLogic = RoundRobinRoutingLogic()
 

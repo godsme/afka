@@ -39,18 +39,17 @@ class PushService
 
   def startConsumer(i: Int) = {
     val consumer = context.actorOf(Consumer.props(
-      cluster, "darwin-group", Array(s"godsme-${i}", s"godsme-${i + 1} ")), i.toString)
+      cluster, "darwin-group", Array(s"godsme-${i}", s"godsme-${i+1}")), i.toString)
     context watch consumer
 
     consumers += i → consumer
   }
 
   def startConsumers = {
-    for(i ← 0 until 2) {
+    for(i ← 0 until 10) {
       startConsumer(i)
     }
   }
-
 
   override def receive: Receive = {
     case ClusterChanged() ⇒ {

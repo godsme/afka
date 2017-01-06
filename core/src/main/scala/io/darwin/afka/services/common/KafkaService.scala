@@ -23,8 +23,8 @@ case class InternalResp(rsp: ResponsePacket, reply: ActorRef)
   * Created by darwin on 27/12/2016.
   */
 
-trait KafkaService extends Actor with ActorLogging with KafkaServiceSinkChannel with ReceivePipeline {
-  this: {
+trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
+  this: Actor with ActorLogging {
     val remote: InetSocketAddress
     val clientId: String
   } ⇒
@@ -69,8 +69,11 @@ trait KafkaService extends Actor with ActorLogging with KafkaServiceSinkChannel 
   }
 
   private def decodeResponseBody(request: RequestPacket, data: ByteString, from: ActorRef): Delegation = {
+    def convert[A](o: A): Any = {
+      if(self == from) o else InternalResp(ResponsePacket(o, request), from)
+    }
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      Inner(InternalResp(ResponsePacket(decode[A](data), request), from))
+      Inner(convert(decode[A](data)))
     }
 
     val apiKey = request.request.apiKey
@@ -110,11 +113,11 @@ trait KafkaService extends Actor with ActorLogging with KafkaServiceSinkChannel 
   }
 
   pipelineOuter {
-    case c @ KafkaClientConnected(conn: ActorRef) ⇒ {
+    case KafkaClientConnected(conn: ActorRef) ⇒ {
       socket = Some(conn)
-      Inner(c)
+      Inner(ChannelConnected(conn))
     }
-    case KafkaResponseData(data: ByteString) ⇒ decodeResponse(data)
+    case KafkaResponseData(data: ByteString)     ⇒ decodeResponse(data)
     case t@Terminated(_) ⇒ {
       clientDead
       Inner(t)

@@ -66,7 +66,10 @@ class Consumer
       case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒
         c.error match{
           case KafkaErrorCode.NO_ERROR ⇒ onCoordinatorReceived(meta, c.coordinator)
-          case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ onRequiredBrokerOffline
+          case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
+            log.info("Group Coordinator is not available")
+            onRequiredBrokerOffline
+          }
           case _ ⇒ {
             log.warning(s"@GroupCoordinateResponse: ${c.error}")
             context.system.scheduler.scheduleOnce(5 second)(onMetaDataReceived(meta))

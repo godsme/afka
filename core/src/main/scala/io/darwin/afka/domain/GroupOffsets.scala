@@ -129,7 +129,7 @@ object GroupOffsets {
 
     }
 
-    println(cluster.toString)
+    //println(cluster.toString)
 
     private def addNode(node: NodeId): NodeOffsets = {
       offsets.getOrElseUpdate(node, NodeOffsets(node))
@@ -161,9 +161,9 @@ object GroupOffsets {
           }
       }
 
-      offsets.foreach {
-        case (node, n) ⇒ println(s"node = ${node}, ${n.toString}")
-      }
+//      offsets.foreach {
+//        case (node, n) ⇒ println(s"node = ${node}, ${n.toString}")
+//      }
     }
 
     def toRequests = {

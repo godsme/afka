@@ -19,11 +19,11 @@ object FetchedMessages {
   case class NodeMessages(node: Int, msgs: MutableList[TopicMessages])
 
   def decode(nodeId: Int, msg: FetchResponse): NodeMessages = {
-    println(s"fetch response received: topics=${msg.topics.length}")
+    //println(s"fetch response received: topics=${msg.topics.length}")
 
     def decodeMsgs(partition: PartitionId, msgs: ByteString) = {
       var partitionMsgs = new MutableList[ProtoMessageInfo]
-      println(s"total size = ${msgs.size}")
+      //println(s"total size = ${msgs.size}")
       val chan = ByteStringSourceChannel(msgs)
       var before = 0
       while(chan.remainSize > 0) {
@@ -35,7 +35,7 @@ object FetchedMessages {
           case e: NoSuchElementException ⇒ ()
         }
       }
-      println(s"${partition}: # of msgs = ${partitionMsgs.size}")
+      //println(s"${partition}: # of msgs = ${partitionMsgs.size}")
       partitionMsgs
     }
 
@@ -69,7 +69,7 @@ object FetchedMessages {
       }
     }
 
-    println(s"total num of msgs = ${total}")
+    //println(s"total num of msgs = ${total}")
 
     NodeMessages(nodeId, nodeMsgs)
   }

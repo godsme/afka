@@ -40,7 +40,7 @@ object FetchService {
 
       }
       else {
-        log.info(s"fetch response received: topics=${msg.topics.length}")
+        //log.info(s"fetch response received: topics=${msg.topics.length}")
 
         val msgs = FetchedMessages.decode(1, msg)
         // processingMsgs
@@ -54,7 +54,7 @@ object FetchService {
           }
         }
 
-        log.info("send fetch request")
+        //log.info("send fetch request")
         sending(offsets.toRequest)
       }
     }

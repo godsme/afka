@@ -44,7 +44,7 @@ object BrokerConnection {
     }
 
     when(CONNECTING, stateTimeout = 5 second) {
-      case Event(KafkaClientConnected(_), _) ⇒ {
+      case Event(ChannelConnected(_), _) ⇒ {
         listener ! WorkerOnline
         goto(CONNECTED)
       }
