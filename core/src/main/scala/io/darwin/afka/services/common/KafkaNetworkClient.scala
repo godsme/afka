@@ -29,7 +29,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
     import context.system
 
     IO(Tcp) ! Connect(remote, options = Vector(SO.TcpNoDelay(false)))
-    log.info(s"connecting ${remote}...")
+    //log.info(s"connecting ${remote}...")
   }
 
   private var closing = false
@@ -107,7 +107,7 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
       suicide(s"server ${remote} unreachable")
 
     case Connected(_, _)  ⇒
-      //log.info(s"connected to ${remote}. ${sender().path.toString}")
+      log.info(s"connected to ${remote}.")
 
       val connection = Some(sender())
       owner ! KafkaClientConnected(connection.get)

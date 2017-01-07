@@ -17,7 +17,7 @@ import io.darwin.afka.packets.responses.{SyncGroupResponse, _}
 import io.darwin.afka.services.common._
 import scala.collection.mutable.Map
 
-import io.darwin.afka.services.pool.PoolSinkChannel
+import io.darwin.afka.services.pool.PoolDynamicSinkChannel
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import akka.pattern._
@@ -50,11 +50,10 @@ object GroupCoordinator {
 
   sealed trait Data
   case object Dummy extends Data
-  case class  Subscrition(v: Array[MemberSubscription]) extends Data
-
+  case class  Subscription(v: Array[MemberSubscription]) extends Data
 
   trait Actor extends FSM[State, Data] {
-    this: Actor with KafkaServiceSinkChannel {
+    this: KafkaServiceSinkChannel{
       val topics  : Array[String]
       val clientId: String
       val groupId : String
@@ -88,7 +87,7 @@ object GroupCoordinator {
     }
 
     when(ASSIGN) {
-      case Event(r: MetaDataResponse, Subscrition(sub)) ⇒
+      case Event(r: MetaDataResponse, Subscription(sub)) ⇒
         onMetaDataReceived(r, sub)
     }
 
@@ -192,11 +191,8 @@ object GroupCoordinator {
     private def sync(rsp: JoinGroupResponse): State = {
       if(rsp.leaderId == rsp.memberId) {
         val subscription = decodeSubscription(rsp)
-
-        context.actorSelection("/user/push-service/cluster") !
-          MetaDataRequest(Some(getTopics(subscription)))
-
-        goto(ASSIGN) using(Subscrition(subscription))
+        sending(MetaDataRequest(Some(getTopics(subscription))))
+        goto(ASSIGN) using(Subscription(subscription))
       }
       else
         startSync()
@@ -257,12 +253,11 @@ object GroupCoordinator {
           PartitionOffsetCommitRequest(partition, info.last.offset)
         }
 
-      val getTopics =
-        msgs.toArray.map { case TopicMessages(topic, m) ⇒
+      def getTopics = msgs.toArray.map { case TopicMessages(topic, m) ⇒
           TopicOffsetCommitRequest(
             topic      = topic,
             partitions = getPartitions(m))
-          }
+        }
 
       def sendCommit = {
         sending(OffsetCommitRequest(
@@ -296,7 +291,7 @@ object GroupCoordinator {
         stay
       }
       else
-        stop
+        suicide("heart beat with response")
     }
 
     def onResult(error: Short, on: String)(success: ⇒ State): State = {

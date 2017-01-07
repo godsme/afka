@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
 import akka.routing.{Router, RoutingLogic}
 import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.SyncGroupResponse
+import io.darwin.afka.services.pool.Echo
 
 import scala.collection.mutable.Map
 
@@ -70,13 +71,8 @@ trait AfkaRouter extends Actor with ActorLogging {
   override def receive: Receive = {
     case WorkerOnline               ⇒ onWorkerOnline
     case WorkerOffline(cause)       ⇒ onWorkerOffline(cause)
-    case e:RequestPacket            ⇒ onRoutingRequest(e)
-    case e:JoinGroupRequest         ⇒ onRoutingRequest(e)
-    case e:SyncGroupRequest         ⇒ onRoutingRequest(e)
-    case e:OffsetFetchRequest       ⇒ onRoutingRequest(e)
-    case e:HeartBeatRequest         ⇒ onRoutingRequest(e)
-    case e:FetchRequest             ⇒ onRoutingRequest(e)
     case Terminated(who: ActorRef)  ⇒ onWorkerDown(who)
+    case e                          ⇒ onRoutingRequest(e)
   }
 
   private def onWorkerOnline = {

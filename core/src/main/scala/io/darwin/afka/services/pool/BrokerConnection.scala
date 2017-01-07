@@ -9,6 +9,8 @@ import io.darwin.afka.services.common._
 
 import scala.concurrent.duration._
 
+case object Echo
+
 /**
   * Created by darwin on 2/1/2017.
   */
@@ -78,6 +80,9 @@ object BrokerConnection {
         closeConnection
         goto(DISCONNECT)
       }
+      case Event(Echo, _) ⇒
+        sender ! Echo
+        stay
     }
 
     override def postStop = {

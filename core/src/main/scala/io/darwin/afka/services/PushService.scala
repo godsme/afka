@@ -41,7 +41,7 @@ class PushService
 
   def startConsumer(i: Int) = {
     val consumer = context.actorOf(Consumer.props(
-      cluster, groups(i/10), Array(s"godsme-${i}", s"godsme-${i+1}")), i.toString)
+      cluster, groups(i/10), Array(s"todo-${i}", s"todo-${i+1}")), i.toString)
     context watch consumer
 
     consumers += i → consumer

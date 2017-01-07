@@ -1,39 +1,33 @@
 package io.darwin.afka.services.pool
 
-import akka.actor.{Actor, ActorIdentity, ActorRef, ActorSelection, Identify}
+import akka.actor.{Actor, ActorRef}
 import akka.contrib.pattern.ReceivePipeline
-import akka.contrib.pattern.ReceivePipeline.{HandledCompletely, Inner}
+import akka.contrib.pattern.ReceivePipeline.Inner
 import io.darwin.afka.packets.requests.KafkaRequest
 import io.darwin.afka.services.common.{ChannelConnected, KafkaServiceSinkChannel, ResponsePacket}
 
 /**
-  * Created by darwin on 4/1/2017.
+  * Created by darwin on 8/1/2017.
   */
 trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline {
-  this: {
+  this: Actor {
     def path: String
   } ⇒
 
   private var target: Option[ActorRef] = None
 
-  val identifyId = 1
-  context.actorSelection(path) ! Identify(identifyId)
-
-  override def sending[A <: KafkaRequest](req: A, from: ActorRef = self) = {
-    target.fold { context.actorSelection(path) ! req } { to ⇒ to ! req }
+  protected def send(o: Any) = {
+    target.fold {
+      context.actorSelection(path) ! o
+    } { to ⇒ to ! o }
   }
 
-  pipelineOuter {
-    case ActorIdentity(`identifyId`, c) ⇒
-      c match {
-        case Some(ref) ⇒
-          target = c
-          Inner(ChannelConnected(ref))
-        case None ⇒
-          context stop self
-          HandledCompletely
-      }
-    case ResponsePacket(rsp, _) ⇒
-      Inner(rsp)
+  override def sending[A <: KafkaRequest](req: A, from: ActorRef = self) = {
+    send(req)
+  }
+
+  protected def onChannelReady(ref: ActorRef) = {
+    target = Some(ref)
+    Inner(ChannelConnected(sender()))
   }
 }
