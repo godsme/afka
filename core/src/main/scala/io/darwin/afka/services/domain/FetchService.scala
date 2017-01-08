@@ -1,6 +1,6 @@
 package io.darwin.afka.services.domain
 
-import akka.actor.{ActorLogging, Props}
+import akka.actor.{ActorLogging, ActorRef, Cancellable, Props}
 import io.darwin.afka.domain.FetchedMessages
 import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.{NodeOffsets, PartitionOffsetInfo}
@@ -8,6 +8,7 @@ import io.darwin.afka.packets.responses._
 import io.darwin.afka.services.common.{ChannelAddress, ChannelConnected, KafkaServiceSinkChannel}
 import io.darwin.afka.services.pool.PoolDirectSinkChannel
 
+import scala.concurrent.duration._
 
 /**
   * Created by darwin on 30/12/2016.
@@ -25,12 +26,37 @@ object FetchService {
       val offsets: NodeOffsets
     } ⇒
 
+    var broker: Option[ActorRef] = None
+
     override def receive: Receive = {
-      case ChannelConnected(_)    ⇒ onConnected
-      case msg: FetchResponse     ⇒ onMessageFetched(msg)
+      case ChannelConnected(broker)  ⇒ sendRequest
+      case msg: FetchResponse        ⇒ onMessageFetched(msg)
     }
 
-    private def onConnected = sending(offsets.toRequest)
+    var responded = true
+    var timer: Option[Cancellable] = None
+
+
+    private def sendRequest = {
+      sending(offsets.toRequest)
+    }
+
+    private def startTimer = {
+      responded = false
+      import scala.concurrent.ExecutionContext.Implicits.global
+      timer = Some(context.system.scheduler.scheduleOnce(20 second) {
+        if(!responded) {
+          log.error("no response from broker")
+          context stop self
+        }
+      })
+
+    }
+    private def stopTimer = {
+      responded = true
+      timer.foreach(_.cancel)
+      timer = None
+    }
 
     private var total = 0
 
@@ -58,8 +84,12 @@ object FetchService {
           }
         }
 
-        sending(offsets.toRequest)
+        sendRequest
       }
+    }
+
+    override def postStop = {
+      super.postStop
     }
   }
 }

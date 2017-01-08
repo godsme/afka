@@ -33,7 +33,6 @@ object GroupCoordinator {
   }
 
   sealed trait State
-  case object DISCONNECTED extends State
   case object CONNECTING   extends State
   case object PHASE1       extends State
   case object ASSIGN       extends State
@@ -63,12 +62,9 @@ object GroupCoordinator {
 
     startWith(CONNECTING, Dummy)
 
-    when(DISCONNECTED, stateTimeout = 60 second) {
-      case Event(StateTimeout, Dummy)            ⇒ goto(CONNECTING)
-    }
-
     when(CONNECTING, stateTimeout = 5 second) {
-      case Event(ChannelConnected(_), _)   ⇒ goto(PHASE1)
+      case Event(StateTimeout, _)          ⇒  stop
+      case Event(ChannelConnected(_), _)   ⇒  joinGroup
     }
 
     when(PHASE1) {
@@ -86,7 +82,6 @@ object GroupCoordinator {
     when(JOINED, stateTimeout = 5 second) {
       case Event(StateTimeout, _)                           ⇒ heartBeat
       case Event(r: OffsetFetchResponse, Offsets(Some(o)))  ⇒ onOffsetFetched(r, o)
-      case Event(_: OffsetFetchResponse, Offsets(None))     ⇒ stay
       case Event(r: OffsetCommitResponse, _)                ⇒ onCommitted(r)
       case Event(r: HeartBeatResponse, _)                   ⇒ onHeartBeatRsp(r)
     }
@@ -121,8 +116,15 @@ object GroupCoordinator {
           meta = encode(assigner.subscribe(topics))))))
     }
 
+    private def joinGroup = {
+      sendJoinRequest
+      goto(PHASE1)
+    }
+
     private def rejoinGroup(cause: Short, on: String): State = {
       log.info(s"re-join group when ${on}, cause=${cause}")
+      stopFetchers
+      sendJoinRequest
       goto(PHASE1)
     }
 
@@ -268,12 +270,11 @@ object GroupCoordinator {
 //    }
 
     private def onCommitted(commit: OffsetCommitResponse) = {
-      commit.topics.foreach {
-        case OffsetCommitTopicResponse(topic, partitions) ⇒
-          log.info(s"commit topic: ${topic}")
-          partitions.foreach { case OffsetCommitPartitionResponse(partition, error) ⇒
-            log.info(s"partition = ${partition}, error=${error}")
-          }
+      commit.topics.foreach { case OffsetCommitTopicResponse(topic, partitions) ⇒
+        log.info(s"commit topic: ${topic}")
+        partitions.foreach { case OffsetCommitPartitionResponse(partition, error) ⇒
+          log.info(s"partition = ${partition}, error=${error}")
+        }
       }
 
       stay
@@ -297,24 +298,17 @@ object GroupCoordinator {
     }
 
     ////////////////////////////////////////////////////////////////////
-    onTransition {
-      case _ -> PHASE1 ⇒
-        stopFetchers
-        sendJoinRequest
-    }
-
     whenUnhandled {
       case Event(_: Terminated, Dummy) ⇒
-        stopFetchers
-        goto(DISCONNECTED)
+        stop
       case Event(_: NotReady, _)   ⇒ stop
       case Event(_: Unreachable, _) ⇒ {
         log.error("connection to coordinator server lost")
         stop
       }
-      case Event(e, _) ⇒
-        log.info(s"unhandled: ${e}")
-        stay
+//      case Event(e, _) ⇒
+//        log.info(s"unhandled: ${e}")
+//        stay
     }
 
     initialize()
