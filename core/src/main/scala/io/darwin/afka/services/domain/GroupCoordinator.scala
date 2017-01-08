@@ -7,7 +7,6 @@ import akka.actor.{ActorRef, FSM, Props, Terminated}
 import io.darwin.afka.assignors.PartitionAssignor.MemberSubscription
 import io.darwin.afka.assignors.RangeAssignor
 import io.darwin.afka.decoder.decode
-import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.GroupOffsets
 import io.darwin.afka.domain.KafkaCluster
 import io.darwin.afka.encoder.encode
@@ -16,7 +15,7 @@ import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses.{SyncGroupResponse, _}
 import io.darwin.afka.services.common._
 
-import scala.collection.mutable.{Map, MutableList}
+import scala.collection.mutable.Map
 import scala.concurrent.duration._
 /**
   * Created by darwin on 26/12/2016.
@@ -44,8 +43,9 @@ object GroupCoordinator {
   sealed trait Data
   case object Dummy extends Data
   case class  Subscription(v: Array[MemberSubscription]) extends Data
+  case class  Offsets(v: Option[GroupOffsets]) extends Data
 
-  trait Actor extends FSM[State, Data] with HeartBeater {
+  trait Actor extends FSM[State, Data] {
     this: KafkaServiceSinkChannel{
       val topics  : Array[String]
       val clientId: String
@@ -53,10 +53,10 @@ object GroupCoordinator {
       val cluster : KafkaCluster
     } ⇒
 
-    var memberId   : Option[String] = None
-    var generation : Int            = 0
+    private var memberId   : Option[String] = None
+    private var generation : Int            = 0
 
-    def suicide(reason: String): State = {
+    private def suicide(reason: String): State = {
       log.error(s"suicide: $reason")
       stop(Failure(reason))
     }
@@ -67,37 +67,50 @@ object GroupCoordinator {
       case Event(StateTimeout, Dummy)            ⇒ goto(CONNECTING)
     }
 
-    var broker: Option[ActorRef] = None
     when(CONNECTING, stateTimeout = 5 second) {
-      case Event(ChannelConnected(s), Dummy)   ⇒ {
-        broker = Some(s)
-        goto(PHASE1)
-      }
+      case Event(ChannelConnected(_), _)   ⇒ goto(PHASE1)
     }
 
     when(PHASE1) {
-      case Event(r: JoinGroupResponse, Dummy)  ⇒ onJoined(r)
+      case Event(r: JoinGroupResponse, _)  ⇒ onJoined(r)
     }
 
     when(ASSIGN) {
-      case Event(r: MetaDataResponse, Subscription(sub)) ⇒
-        onMetaDataReceived(r, sub)
+      case Event(r: MetaDataResponse, Subscription(sub)) ⇒ onMetaDataReceived(r, sub)
     }
 
     when(PHASE2) {
-      case Event(r: SyncGroupResponse, Dummy)    ⇒
-        onResult(r.error, "SyncGroup")(onSync(r))
+      case Event(r: SyncGroupResponse, _)    ⇒ onResult(r.error, "SyncGroup")(onSync(r))
     }
 
     when(JOINED, stateTimeout = 5 second) {
-      case Event(StateTimeout, Dummy)            ⇒ heartBeat
-      case Event(r: OffsetFetchResponse, Dummy)  ⇒ onOffsetFetched(r)
-      case Event(r: OffsetCommitResponse, Dummy) ⇒ onCommitted(r)
-      case Event(r: HeartBeatResponse, Dummy)    ⇒ onHeartBeatRsp(r)
+      case Event(StateTimeout, _)                           ⇒ heartBeat
+      case Event(r: OffsetFetchResponse, Offsets(Some(o)))  ⇒ onOffsetFetched(r, o)
+      case Event(_: OffsetFetchResponse, Offsets(None))     ⇒ stay
+      case Event(r: OffsetCommitResponse, _)                ⇒ onCommitted(r)
+      case Event(r: HeartBeatResponse, _)                   ⇒ onHeartBeatRsp(r)
     }
 
     /////////////////////////////////////////////////////////////////
-    val assigner = new RangeAssignor
+    private var heartbeatAck = true
+
+    private def heartBeat = {
+      if(heartbeatAck) {
+        sending(HeartBeatRequest(groupId, generation, memberId.get))
+        heartbeatAck = false
+        stay
+      }
+      else
+        suicide("heart beat with response")
+    }
+
+    private def onHeartBeatRsp(r: HeartBeatResponse): State = {
+      heartbeatAck = true
+      onResult(r.error, "HeartBeat")(stay)
+    }
+
+    /////////////////////////////////////////////////////////////////
+    private val assigner = new RangeAssignor
 
     private def sendJoinRequest = {
       sending(JoinGroupRequest(
@@ -110,17 +123,10 @@ object GroupCoordinator {
 
     private def rejoinGroup(cause: Short, on: String): State = {
       log.info(s"re-join group when ${on}, cause=${cause}")
-      goto(PHASE1) using(Dummy)
+      goto(PHASE1)
     }
 
     private def onJoined(rsp: JoinGroupResponse) = {
-      def onSuccess = {
-        generation = rsp.generation
-        memberId = Some(rsp.memberId)
-
-        sync(rsp)
-      }
-
       log.info(
         s"@joinGroup: error = ${rsp.errorCode}, " +
           s"generation = ${rsp.generation}, " +
@@ -129,7 +135,11 @@ object GroupCoordinator {
           s"member = ${rsp.memberId}, " +
           s"members = ${rsp.members.getOrElse(Array.empty).mkString(",")}")
 
-      onResult(rsp.errorCode, "JoinGroup")(onSuccess)
+      onResult(rsp.errorCode, "JoinGroup") {
+        generation = rsp.generation
+        memberId = Some(rsp.memberId)
+        syncGroup(rsp)
+      }
     }
 
     private def getTopics(subs: Array[MemberSubscription]) = {
@@ -151,48 +161,48 @@ object GroupCoordinator {
       }
     }
 
-    private def startSync(assignments: Array[GroupAssignment] = Array.empty): State = {
+    private def sync(assignments: Array[GroupAssignment] = Array.empty): State = {
       sending(SyncGroupRequest(groupId, generation, memberId.get, assignments))
       goto(PHASE2) using Dummy
     }
 
     private def onMetaDataReceived(r: MetaDataResponse, subscription: Array[MemberSubscription]) = {
-      def leaderSync(c: KafkaCluster) = {
+      def assignments(c: KafkaCluster) = {
         assigner
           .assign(c, subscription).toArray
-          .map { case (member, assignments) ⇒
+          .map { case (member, ms) ⇒
             GroupAssignment(
               member     = member,
-              assignment = encode(ProtoMemberAssignment(topics = assignments.toArray)))
+              assignment = encode(ProtoMemberAssignment(topics = ms.toArray)))
           }
       }
 
-      startSync(leaderSync(KafkaCluster(r)))
+      sync(assignments(KafkaCluster(r)))
     }
 
-    private def sync(rsp: JoinGroupResponse): State = {
-      if(rsp.leaderId == rsp.memberId) {
-        val subscription = decodeSubscription(rsp)
+    private def syncGroup(rsp: JoinGroupResponse): State = {
+      def assigning(subscription: Array[MemberSubscription]) = {
         sending(MetaDataRequest(Some(getTopics(subscription))))
         goto(ASSIGN) using(Subscription(subscription))
       }
+
+      if(rsp.leaderId == rsp.memberId)
+        assigning(decodeSubscription(rsp))
       else
-        startSync()
+        sync()
     }
 
-    private var groups: Option[GroupOffsets] = None
-
     private def onSync(r: SyncGroupResponse) = {
-      groups = r.assignment.map { case p ⇒
-        new GroupOffsets(cluster, p.topics)
-      }
-
       def logMsg = {
         r.assignment.map { s ⇒
           s.topics.foreach { case ProtoPartitionAssignment(topic, partitions) ⇒
             log.info(s"topic=${topic}, partitions={${partitions.mkString(", ")}}")
           }
         }
+      }
+
+      val groupOffsets = r.assignment.map { case p ⇒
+        new GroupOffsets(cluster, p.topics)
       }
 
       def fetchOffset = {
@@ -204,28 +214,32 @@ object GroupCoordinator {
             topics = s.topics))
         }
 
-        goto(JOINED)
+        goto(JOINED) using(Offsets(groupOffsets))
       }
+
 
       onResult(r.error, "@SyncGroup")(fetchOffset)
     }
 
     private var fetchers: Array[ActorRef] = Array.empty
 
-    private def stopFetchers = fetchers.foreach(context.stop)
+    private def stopFetchers = {
+      fetchers.foreach(context.stop)
+      fetchers = Array.empty
+    }
 
-    private def onOffsetFetched(offsets: OffsetFetchResponse) = {
-      groups.foreach(_.update(offsets.topics))
+    private def onOffsetFetched(offsets: OffsetFetchResponse, groupOffsets: GroupOffsets) = {
+      groupOffsets.update(offsets.topics)
 
-      fetchers = groups.get.offsets.toArray.map { case (node, off) ⇒
-        context.actorOf(FetchService.props(
+      fetchers = groupOffsets.map { (node, off) ⇒
+        context watch context.actorOf(FetchService.props(
             channel  = cluster.getBroker(node).get,
             clientId = clientId,
             offsets  = off ),
           "fetcher-"+node)
       }
 
-      stay
+      stay using(Dummy)
     }
 
 //    def autoCommit(msgs: MutableList[TopicMessages]) = {
@@ -253,7 +267,7 @@ object GroupCoordinator {
 //      if(msgs.size > 0) sendCommit
 //    }
 
-    def onCommitted(commit: OffsetCommitResponse) = {
+    private def onCommitted(commit: OffsetCommitResponse) = {
       commit.topics.foreach {
         case OffsetCommitTopicResponse(topic, partitions) ⇒
           log.info(s"commit topic: ${topic}")
@@ -266,7 +280,7 @@ object GroupCoordinator {
     }
 
 
-    def onResult(error: Short, on: String)(success: ⇒ State) = {
+    private def onResult(error: Short, on: String)(success: ⇒ State) = {
       error match {
         case KafkaErrorCode.NO_ERROR               ⇒ success
         case KafkaErrorCode.UNKNOWN_MEMBER_ID      ⇒ { memberId = None; rejoinGroup(error, on)}
@@ -287,8 +301,6 @@ object GroupCoordinator {
       case _ -> PHASE1 ⇒
         stopFetchers
         sendJoinRequest
-      case _ -> DISCONNECTED ⇒
-        broker = None
     }
 
     whenUnhandled {

@@ -8,6 +8,7 @@ import io.darwin.afka.packets.requests.{FetchPartitionRequest, FetchRequest, Fet
 import io.darwin.afka.packets.responses.{OffsetFetchPartitionResponse, OffsetFetchResponse, OffsetFetchTopicResponse}
 
 import scala.collection.mutable.Map
+import scala.reflect.ClassTag
 
 /**
   * Created by darwin on 31/12/2016.
@@ -114,6 +115,10 @@ object GroupOffsets {
     type NodeMap = Map[NodeId, NodeOffsets]
 
     val offsets: NodeMap = Map.empty
+
+    def map[A: ClassTag](f: (NodeId, NodeOffsets) ⇒ A): Array[A] = {
+      offsets.map{case (a, b) ⇒ f(a,b)}.toArray
+    }
 
     group.foreach {
       case ProtoPartitionAssignment(topic, partitions) ⇒
