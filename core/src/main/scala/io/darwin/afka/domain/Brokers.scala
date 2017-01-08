@@ -30,30 +30,21 @@ object Broker {
 
 class Brokers(b: Array[BrokerResponse]) {
 
-  val length = b.length
+  val length                 = b.length
   val brokers: Array[Broker] = b.sortBy(_.nodeId).map(Broker(_))
-
-  val map: Map[Int, Broker] = brokers.map(b ⇒ (b.nodeId, b)).toMap
+  val map: Map[Int, Broker]  = brokers.map(b ⇒ (b.nodeId, b)).toMap
 
   override def equals(obj: scala.Any): Boolean = {
     obj match {
-      case that: Brokers ⇒
-        ArrayCompare(brokers, that.brokers)
-      case that: Array[BrokerResponse] ⇒
-        ArrayCompare(brokers, Brokers(that).brokers)
-      case _ ⇒ false
+      case that: Brokers               ⇒ ArrayCompare(brokers, that.brokers)
+      case that: Array[BrokerResponse] ⇒ ArrayCompare(brokers, Brokers(that).brokers)
+      case _                           ⇒ false
     }
   }
 
-  def apply(i: Int): Broker = brokers(i)
-
-  def get(node: Int): Option[Broker] = {
-    map.get(node)
-  }
-
-  def byIndex(i: Int): Broker = {
-    brokers(i)
-  }
+  def apply(i: Int)   : Broker         = brokers(i)
+  def get(node: Int)  : Option[Broker] = map.get(node)
+  def byIndex(i: Int) : Broker         = brokers(i)
 }
 
 object Brokers {

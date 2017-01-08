@@ -1,15 +1,12 @@
 package io.darwin.afka.services.domain
 
-import java.net.InetSocketAddress
-
 import akka.actor.{ActorLogging, Props}
-import io.darwin.afka.NodeId
 import io.darwin.afka.domain.FetchedMessages
 import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.{NodeOffsets, PartitionOffsetInfo}
 import io.darwin.afka.packets.responses._
-import io.darwin.afka.services.common.{ChannelAddress, ChannelConnected, KafkaService, KafkaServiceSinkChannel}
-import io.darwin.afka.services.pool.{PoolDirectSinkChannel, PoolDynamicSinkChannel}
+import io.darwin.afka.services.common.{ChannelAddress, ChannelConnected, KafkaServiceSinkChannel}
+import io.darwin.afka.services.pool.PoolDirectSinkChannel
 
 
 /**
@@ -28,25 +25,18 @@ object FetchService {
       val offsets: NodeOffsets
     } ⇒
 
-    log.info("Fetcher restarted")
-
     override def receive: Receive = {
       case ChannelConnected(_)    ⇒ onConnected
       case msg: FetchResponse     ⇒ onMessageFetched(msg)
     }
 
-    private def onConnected = {
-      sending(offsets.toRequest)
-    }
+    private def onConnected = sending(offsets.toRequest)
 
-    var total = 0
+    private var total = 0
+
     private def onMessageFetched(msg: FetchResponse) = {
-      if(msg.topics.length == 0) {
-      }
-      else {
-        //log.info(s"fetch response received: topics=${msg.topics.length}")
+      if(msg.topics.length > 0) {
         val msgs = FetchedMessages.decode(1, msg)
-        // processingMsgs
 
         val count = msgs.msgs.foldLeft(0){ case (s, m) ⇒
           s + m.msgs.foldLeft(0) { case (ss, ms) ⇒

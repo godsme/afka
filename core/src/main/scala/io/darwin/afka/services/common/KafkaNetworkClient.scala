@@ -80,7 +80,10 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
   private val cached = new Cache()
 
-  private def bufferWriting(packet: ByteString) = unsent :+= packet
+  private def bufferWriting(packet: ByteString) = {
+    println("write fail happened")
+    unsent :+= packet
+  }
 
   private def suicide(reason: String) = {
     log.info(s"suicide: ${reason}")
@@ -91,6 +94,8 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
   private def acknowledge = {
     require(!unsent.isEmpty)
+
+    println("acknowledge")
 
     unsent = unsent.drop(1)
 

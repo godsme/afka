@@ -38,12 +38,9 @@ object KafkaPartition {
 
 ////////////////////////////////////////////////////////////////////
 object KafkaTopic {
-  def apply(v: TopicMetaData) =
-    new KafkaTopic(
-      v.topic,
-      v.partitions
-        .filter(_.leader >= 0) // when the leader of the partition is offline, leader = -1
-        .map(KafkaPartition(_)))
+  def apply(v: TopicMetaData) = new KafkaTopic(
+      id         = v.topic,
+      partitions = v.partitions.filter(_.leader >= 0).map(KafkaPartition(_)))
 
   type PartitionMap = Map[PartitionId, KafkaPartition]
 }
@@ -51,15 +48,15 @@ object KafkaTopic {
 class KafkaTopic( val id         : String,
                   val partitions : Array[KafkaPartition]) {
   override val toString =
-    s"""topic[ ${"%-8s".format(id)} ] = ${partitions.mkString(", ")}"""
+    s"topic[ ${"%-8s".format(id)} ] = ${partitions.mkString(", ")}"
 
   private var partitionMap: KafkaTopic.PartitionMap = Map.empty
 
   def toPartitionMap = partitionMap
 
   partitions
-    .filter(_.leader >= 0)
-    .foreach { p ⇒ partitionMap += p.id → p }
+    .filter (_.leader >= 0)
+    .foreach(p ⇒ partitionMap += p.id → p)
 }
 
 ////////////////////////////////////////////////////////////////////

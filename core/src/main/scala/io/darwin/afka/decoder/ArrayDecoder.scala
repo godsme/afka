@@ -1,7 +1,5 @@
 package io.darwin.afka.decoder
 
-import java.nio.ByteBuffer
-
 import scala.reflect.ClassTag
 
 /**
@@ -30,11 +28,11 @@ object ArrayDecoder {
     extends NullableDecoder[Array[A]](decoder)
 
   def make[A: ClassTag](implicit decoder: KafkaDecoder[A]): KafkaDecoder[Array[A]] = {
-    new VarSizeDecoder[Array[A]](ch => ch.getInt)(new WithSizeArrayDecoder[A](decoder))
+    new VarSizeDecoder[Array[A]](_.getInt)(new WithSizeArrayDecoder[A](decoder))
   }
 
   def makeNullable[A: ClassTag](implicit decoder: KafkaDecoder[A]): KafkaDecoder[Option[Array[A]]] = {
-    new VarSizeDecoder[Option[Array[A]]](ch => ch.getInt)(new NullableDecoder[Array[A]](new WithSizeArrayDecoder[A](decoder)))
+    new VarSizeDecoder[Option[Array[A]]](_.getInt)(new NullableDecoder[Array[A]](new WithSizeArrayDecoder[A](decoder)))
   }
 }
 

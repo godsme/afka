@@ -8,13 +8,11 @@ import java.nio.ByteBuffer
 object StringDecoder {
 
   implicit object WithSizeStringDecoder extends WithSizeObjectDecoder[String] {
-
     override def doDecode(chan: SourceChannel, size: Int): String = {
       val bytes = new Array[Byte](size)
       chan.getBytes(bytes)
       new String(bytes, "UTF8")
     }
-
   }
 
   implicit object WithSizeNullableStringDecoder extends NullableDecoder[String](WithSizeStringDecoder)

@@ -35,13 +35,13 @@ class Consumer
   import ExecutionContext.Implicits.global
 
   private def onRequiredBrokerOffline = {
-    log.error("SUBSCRIBE")
     context.system.eventStream.subscribe(self, classOf[ClusterChanged])
   }
+
   def hasOfflineLeader(topics: Array[TopicMetaData]): Boolean = {
     (topics.filter(_.errorCode != KafkaErrorCode.NO_ERROR).length > 0) ||
     topics.count { t ⇒
-      t.partitions.count{ p ⇒ (p.errorCode != 0) || p.leader < 0} > 0
+      t.partitions.count{ p ⇒ (p.errorCode != 0) || p.leader < 0 } > 0
     } > 0
   }
 
@@ -51,36 +51,40 @@ class Consumer
     }
 
     coordinator = Some(context.actorOf(GroupCoordinator.props(
-      coordinator = c,
-      groupId = group,
-      cluster = KafkaCluster(meta),
-      topics = topics),
+        coordinator = c,
+        groupId     = group,
+        cluster     = KafkaCluster(meta),
+        topics      = topics),
       "coordinator"))
 
     coordinator.foreach(context watch)
   }
 
   private def onMetaDataReceived(meta: MetaDataResponse): Unit = {
-    implicit val timeout: Timeout = Timeout(1 second)
-    (cluster ? GroupCoordinateRequest(group)) onComplete {
-      case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒
-        c.error match{
-          case KafkaErrorCode.NO_ERROR ⇒ onCoordinatorReceived(meta, c.coordinator)
-          case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
-            log.info("Group Coordinator is not available")
-            onRequiredBrokerOffline
-          }
-          case _ ⇒ {
-            log.warning(s"@GroupCoordinateResponse: ${c.error}")
-            context.system.scheduler.scheduleOnce(5 second)(onMetaDataReceived(meta))
-          }
+    def onCoordinatorResp(c: GroupCoordinateResponse) = {
+      c.error match {
+        case KafkaErrorCode.NO_ERROR ⇒ onCoordinatorReceived(meta, c.coordinator)
+        case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE ⇒ {
+          onRequiredBrokerOffline
         }
-      case _ ⇒ context stop self
+        case _ ⇒ {
+          log.warning(s"@GroupCoordinateResponse: ${c.error}")
+          context.system.scheduler.scheduleOnce(5 second)(onMetaDataReceived(meta))
+        }
+      }
+    }
+
+    implicit val timeout: Timeout = Timeout(1 second)
+
+    (cluster ? GroupCoordinateRequest(group)) onComplete {
+      case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒ onCoordinatorResp(c)
+      case _                                                      ⇒ context stop self
     }
   }
 
   def startup = {
     implicit val timeout: Timeout = Timeout(10 second)
+
     (cluster ? MetaDataRequest(Some(topics))) onComplete {
       case Success(meta: MetaDataResponse) ⇒ onMetaDataReceived(meta)
       case _                               ⇒ context stop self
@@ -90,14 +94,12 @@ class Consumer
   context.system.scheduler.scheduleOnce(1 second)(startup)
 
   override def receive = {
-    case Terminated(_)    ⇒ context stop self
-    case _:ClusterChanged ⇒
-      log.error("CLUSTER CHANGED")
-      context stop self
-    case e                ⇒ log.info(s"${e}")
+    case Terminated(_)     ⇒ context stop self
+    case _: ClusterChanged ⇒ context stop self
+    case e                 ⇒ log.info(s"${e}")
   }
 
-  override def postStop(): Unit = {
+  override def postStop() = {
     context.system.eventStream.unsubscribe(self, classOf[ClusterChanged])
     super.postStop()
   }
