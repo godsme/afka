@@ -99,6 +99,9 @@ trait AfkaRouter extends Actor with ActorLogging {
 
     router = router.removeRoutee(sender())
     workers(getIndex) = (sender, false)
+    if(router.routees.size == 0) {
+      listener ! WorkerOffline("all workers offline")
+    }
   }
 
   private def onRoutingRequest(o: Any) = {
@@ -122,8 +125,6 @@ trait AfkaRouter extends Actor with ActorLogging {
     if(workers.get(i).isDefined) {
       workers -= i
       addWorker(i)
-    } else{
-      log.info(s"Worker ${who} Disappear")
     }
   }
 

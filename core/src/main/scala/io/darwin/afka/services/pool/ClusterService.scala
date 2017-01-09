@@ -130,6 +130,10 @@ class ClusterService(val clusterId  : String,
 
       stay
     }
+    case Event(NotReady(RequestPacket(o, _)), _) ⇒ {
+      send(o)
+      stay
+    }
   }
 
   def onBootstrapped(meta: MetaDataResponse) = {

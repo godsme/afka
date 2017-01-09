@@ -68,7 +68,7 @@ object GroupCoordinator {
       case Event(StateTimeout, _)          ⇒  suicide("connect timeout")
       case Event(ChannelConnected(who), _)   ⇒  {
         connection = Some(who)
-        joinGroup
+        goto(PHASE1)
       }
     }
 
@@ -121,15 +121,8 @@ object GroupCoordinator {
           meta = encode(assigner.subscribe(topics))))))
     }
 
-    private def joinGroup = {
-      sendJoinRequest
-      goto(PHASE1)
-    }
-
     private def rejoinGroup(cause: Short, on: String): State = {
       log.info(s"re-join group when ${on}, cause=${cause}")
-      stopFetchers
-      sendJoinRequest
       goto(PHASE1)
     }
 
@@ -308,10 +301,17 @@ object GroupCoordinator {
     }
 
     ////////////////////////////////////////////////////////////////////
+    onTransition {
+      case _ -> PHASE1 ⇒
+        stopFetchers
+        sendJoinRequest
+    }
+
     whenUnhandled {
       case Event(Terminated(who), Dummy) ⇒
-        if(who == connection.getOrElse(null))
+        if(connection.fold(false)(who == _)) {
           suicide("Connection Terminated")
+        }
         else
           stay
 

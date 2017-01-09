@@ -37,18 +37,20 @@ class PushService
 
   var consumers: Map[Int, ActorRef] = Map.empty
 
-  val groups: Array[String] = Array("darwin-group", "godsme-group", "afka-group")
+  val groups: Array[String] = Array.range(0, 20).map(i ⇒ s"group-${i}")
 
-  def startConsumer(i: Int) = {
+  val base = 20
+
+  def startConsumer(n: Int) = {
     val consumer = context.actorOf(Consumer.props(
-      cluster, groups(i/10), Array(s"todo-${i}", s"todo-${i+1}")), i.toString)
+      cluster, groups(n/base), Array(s"todo-${n}", s"todo-${n+1}")), n.toString)
     context watch consumer
 
-    consumers += i → consumer
+    consumers += n → consumer
   }
 
   def startConsumers = {
-    for(i ← 0 until 20)
+    for(i ← 0 until 100)
       startConsumer(i)
   }
 

@@ -37,7 +37,7 @@ object BrokerConnection {
 
     startWith(CONNECTING, Dummy)
 
-    when(DISCONNECT, stateTimeout = 5 second) {
+    when(DISCONNECT, stateTimeout = 60 second) {
       case Event(StateTimeout, _) ⇒ {
         log.info("reconnect")
         reconnect
@@ -63,10 +63,14 @@ object BrokerConnection {
         stay
       }
       case Event(ErrorClosed(cause), _) ⇒ {
-        listener ! WorkerOffline(cause)
-        closeConnection
-        goto(DISCONNECT)
+        onDisconnected(cause)
       }
+    }
+
+    def onDisconnected(cause: String) = {
+      listener ! WorkerOffline(cause)
+      closeConnection
+      goto(DISCONNECT)
     }
 
     def handleRequest(request: RequestPacket) = {
@@ -75,10 +79,8 @@ object BrokerConnection {
     }
 
     whenUnhandled {
-      case Event(Terminated(_), _) |
-           Event(StateTimeout, _) ⇒ {
-        closeConnection
-        goto(DISCONNECT)
+      case Event(Terminated(who), _) ⇒ {
+        onDisconnected(s"${who} terminated")
       }
       case Event(Echo, _) ⇒
         sender ! Echo

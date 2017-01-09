@@ -115,11 +115,11 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
   pipelineOuter {
     case KafkaClientConnected(conn: ActorRef) ⇒ {
       socket = Some(conn)
-      Inner(ChannelConnected(conn))
+      Inner(ChannelConnected(client.get))
     }
     case KafkaResponseData(data: ByteString)     ⇒ decodeResponse(data)
     case t@Terminated(who) ⇒ {
-      if(socket.fold(false)(_ == who) || client.fold(false)(_ == who)) {
+      if(client.fold(false)(_ == who)) {
         clientDead
       }
       Inner(t)
@@ -127,7 +127,11 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
   }
 
   def closeConnection = {
-    client.map(context.stop(_))
+    client.foreach { c ⇒
+      context unwatch c
+      context stop c
+    }
+
     clientDead
   }
 }
