@@ -1,6 +1,6 @@
 package io.darwin.afka.services.domain
 
-import akka.actor.{ActorLogging, ActorRef, Cancellable, Props}
+import akka.actor.{ActorLogging, ActorRef, Cancellable, Props, Terminated}
 import io.darwin.afka.domain.FetchedMessages
 import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.{NodeOffsets, PartitionOffsetInfo}
@@ -31,6 +31,9 @@ object FetchService {
     override def receive: Receive = {
       case ChannelConnected(broker)  ⇒ sendRequest
       case msg: FetchResponse        ⇒ onMessageFetched(msg)
+      case Terminated(_)             ⇒
+        log.error("CONNECTION LOST")
+        context stop self
     }
 
     var responded = true

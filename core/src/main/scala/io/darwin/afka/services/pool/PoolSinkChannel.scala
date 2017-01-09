@@ -1,6 +1,6 @@
 package io.darwin.afka.services.pool
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorLogging, ActorRef}
 import akka.contrib.pattern.ReceivePipeline
 import akka.contrib.pattern.ReceivePipeline.Inner
 import io.darwin.afka.packets.requests.KafkaRequest
@@ -9,7 +9,7 @@ import io.darwin.afka.services.common.{ChannelConnected, KafkaServiceSinkChannel
 /**
   * Created by darwin on 8/1/2017.
   */
-trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline {
+trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline with ActorLogging {
   this: Actor {
     def path: String
   } ⇒
@@ -28,6 +28,8 @@ trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline {
 
   protected def onChannelReady(ref: ActorRef) = {
     target = Some(ref)
+    context watch ref
+    log.info(s"Watch ${ref}")
     Inner(ChannelConnected(sender()))
   }
 }

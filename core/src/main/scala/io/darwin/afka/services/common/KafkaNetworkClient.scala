@@ -32,7 +32,6 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
     //log.info(s"connecting ${remote}...")
   }
 
-  private var closing = false
   private var unsent = Vector.empty[ByteString]
   private var connection: Option[ActorRef] = None
 
@@ -99,11 +98,8 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
 
     unsent = unsent.drop(1)
 
-    if(unsent.isEmpty) {
-      if(closing) suicide("BUG: data inconsistency")
-    }
-    else {
-      connection.get ! Write(unsent(0), Ack)
+    connection.foreach { c ⇒
+      if(!unsent.isEmpty) c ! Write(unsent(0), Ack)
     }
   }
 
@@ -120,19 +116,18 @@ class KafkaNetworkClient(remote: InetSocketAddress, owner: ActorRef)
       context.become({
         case Received(data) ⇒ cached.buffer(data)
         case Ack            ⇒ acknowledge
-        case PeerClosed     ⇒ closing = true
         case CommandFailed(Write(data: ByteString, _)) ⇒ bufferWriting(data)
-        case _: ConnectionClosed ⇒ suicide(s"connection to ${remote} lost")
+        case PeerClosed | _: ConnectionClosed ⇒ suicide(s"connection to ${remote} lost")
       }, discardOld = false)
 
   }
 
   private def closeConnection = {
-    connection.foreach { c ⇒
+    connection.foreach{ c ⇒
       log.info(s"close connection ${c}")
+      c ! Close
     }
 
-    connection.map(_ ! Close)
     connection = None
   }
 

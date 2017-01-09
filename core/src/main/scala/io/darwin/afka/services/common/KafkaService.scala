@@ -118,8 +118,10 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
       Inner(ChannelConnected(conn))
     }
     case KafkaResponseData(data: ByteString)     ⇒ decodeResponse(data)
-    case t@Terminated(_) ⇒ {
-      clientDead
+    case t@Terminated(who) ⇒ {
+      if(socket.fold(false)(_ == who) || client.fold(false)(_ == who)) {
+        clientDead
+      }
       Inner(t)
     }
   }

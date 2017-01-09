@@ -62,9 +62,14 @@ object GroupCoordinator {
 
     startWith(CONNECTING, Dummy)
 
+    var connection: Option[ActorRef] = None
+
     when(CONNECTING, stateTimeout = 5 second) {
-      case Event(StateTimeout, _)          ⇒  stop
-      case Event(ChannelConnected(_), _)   ⇒  joinGroup
+      case Event(StateTimeout, _)          ⇒  suicide("connect timeout")
+      case Event(ChannelConnected(who), _)   ⇒  {
+        connection = Some(who)
+        joinGroup
+      }
     }
 
     when(PHASE1) {
@@ -96,7 +101,7 @@ object GroupCoordinator {
         stay
       }
       else
-        suicide("heart beat with response")
+        suicide("heart beat without response")
     }
 
     private def onHeartBeatRsp(r: HeartBeatResponse): State = {
@@ -290,25 +295,32 @@ object GroupCoordinator {
              KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ rejoinGroup(error, on)
 
         case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE |
-             KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP          ⇒ suicide(error.toString)
+             KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP          ⇒ suicide(s"${on} ${KafkaErrorCode.string(error)}")
 
-        case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED         ⇒ suicide(error.toString)
+        case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED         ⇒ suicide(on + error.toString)
         case e ⇒ suicide(s"${on} failed: ${e}")
       }
     }
 
+    override def postStop = {
+      log.info("coordinator stopped")
+      super.postStop
+    }
+
     ////////////////////////////////////////////////////////////////////
     whenUnhandled {
-      case Event(_: Terminated, Dummy) ⇒
-        stop
-      case Event(_: NotReady, _)   ⇒ stop
-      case Event(_: Unreachable, _) ⇒ {
-        log.error("connection to coordinator server lost")
-        stop
-      }
-//      case Event(e, _) ⇒
-//        log.info(s"unhandled: ${e}")
-//        stay
+      case Event(Terminated(who), Dummy) ⇒
+        if(who == connection.getOrElse(null))
+          suicide("Connection Terminated")
+        else
+          stay
+
+      case Event(_: NotReady, _)   ⇒
+        suicide("Connection Not Ready")
+      case Event(_: Unreachable, _) ⇒
+        suicide("Connection Unreachable")
+      case Event(e, _) ⇒
+        suicide(s"unhandled: ${e}")
     }
 
     initialize()

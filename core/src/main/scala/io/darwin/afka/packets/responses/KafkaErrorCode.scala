@@ -37,4 +37,15 @@ object KafkaErrorCode {
   val AUTHORIZATION_FAILED: Short             = 29
   val GROUP_AUTHORIZATION_FAILED: Short       = 30
   val CLUSTER_AUTHORIZATION_FAILED: Short     = 31
+
+  private val map: Map[Short, String] = Map(
+    NOT_LEADER_FOR_PARTITION        → "not leader for partition",
+    BROCKER_NOT_AVAIL               → "broker not available",
+    GROUP_COORDINATOR_NOT_AVAILABLE → "group coordinator not available",
+    NOT_COORDINATOR_FOR_GROUP       → "not coordinator for group",
+    UNKNOWN_MEMBER_ID               → "unknown member id",
+    REBALANCE_IN_PROGRESS           → "rebalance in progress")
+
+  def string(code: Short): String = s"code=${code}, ${map.get(code).getOrElse("unspecified")}"
+
 }
