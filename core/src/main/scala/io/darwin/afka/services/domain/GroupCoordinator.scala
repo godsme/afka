@@ -277,9 +277,7 @@ object GroupCoordinator {
     private def onCommitted(commit: OffsetCommitResponse) = {
       commit.topics.foreach { case OffsetCommitTopicResponse(topic, partitions) ⇒
         log.info(s"commit topic: ${topic}")
-        partitions.foreach { case OffsetCommitPartitionResponse(partition, error) ⇒
-          log.info(s"partition = ${partition}, error=${error}")
-        }
+        partitions.foreach(p ⇒ log.info(s"${p}"))
       }
 
       stay
@@ -287,18 +285,20 @@ object GroupCoordinator {
 
 
     private def onResult(error: Short, on: String)(success: ⇒ State) = {
+      def fatal = suicide(s"${on} ${KafkaErrorCode.string(error)}")
       error match {
-        case KafkaErrorCode.NO_ERROR               ⇒ success
-        case KafkaErrorCode.UNKNOWN_MEMBER_ID      ⇒ { memberId = None; rejoinGroup(error, on)}
+        case KafkaErrorCode.NO_ERROR                           ⇒ success
+        case KafkaErrorCode.UNKNOWN_MEMBER_ID                  ⇒ { memberId = None; rejoinGroup(error, on)}
 
         case KafkaErrorCode.ILLEGAL_GENERATION |
-             KafkaErrorCode.REBALANCE_IN_PROGRESS  ⇒ rejoinGroup(error, on)
+             KafkaErrorCode.REBALANCE_IN_PROGRESS              ⇒ rejoinGroup(error, on)
 
         case KafkaErrorCode.GROUP_COORDINATOR_NOT_AVAILABLE |
-             KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP          ⇒ suicide(s"${on} ${KafkaErrorCode.string(error)}")
+             KafkaErrorCode.NOT_COORDINATOR_FOR_GROUP          ⇒ fatal
 
-        case KafkaErrorCode.GROUP_AUTHORIZATION_FAILED         ⇒ suicide(on + error.toString)
-        case e ⇒ suicide(s"${on} failed: ${e}")
+        case KafkaErrorCode.INCONSISTENT_GROUP_PROTOCOL     |
+             KafkaErrorCode.GROUP_AUTHORIZATION_FAILED      |
+             _                                                 ⇒ fatal
       }
     }
 
@@ -329,7 +329,7 @@ object GroupCoordinator {
 
 ///////////////////////////////////////////////////////////////////////
 class GroupCoordinator
-  ( coordinator : Coordinator,
+  (     coordinator : Coordinator,
     val clientId    : String,
     val groupId     : String,
     val cluster     : KafkaCluster,
@@ -338,4 +338,3 @@ class GroupCoordinator
 
   val remote = new InetSocketAddress(coordinator.host, coordinator.port)
 }
-

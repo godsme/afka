@@ -29,7 +29,6 @@ trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline with 
   protected def onChannelReady(ref: ActorRef) = {
     target = Some(ref)
     context watch ref
-    log.info(s"Watch ${ref}")
     Inner(ChannelConnected(sender()))
   }
 }
