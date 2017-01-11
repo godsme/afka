@@ -58,10 +58,6 @@ object BrokerConnection {
         sending(e, sender)
         stay
       }
-      case Event(InternalResp(r:ResponsePacket, from), _) ⇒ {
-        from ! r
-        stay
-      }
       case Event(ErrorClosed(cause), _) ⇒ {
         onDisconnected(cause)
       }

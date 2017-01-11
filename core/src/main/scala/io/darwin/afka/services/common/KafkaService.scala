@@ -16,8 +16,7 @@ import io.darwin.afka.byteOrder
 import scala.collection.mutable.Map
 
 case class RequestPacket(request: KafkaRequest, who: ActorRef)
-case class ResponsePacket(response: Any, req: RequestPacket)
-case class InternalResp(rsp: ResponsePacket, reply: ActorRef)
+case class ResponsePacket(response: Any, who: ActorRef)
 
 /**
   * Created by darwin on 27/12/2016.
@@ -59,21 +58,25 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
     }
   }
 
-  protected def send(request: RequestPacket, from: ActorRef) = {
+  protected def send(request: RequestPacket, from: ActorRef = self) = {
     doSend(request.request)
     pendingRequests += lastCorrelationId → (request, from)
   }
 
-  override def sending[A <: KafkaRequest](req: A, from: ActorRef) = {
+  override def sending[A <: KafkaRequest](req: A, from: ActorRef = self) = {
     send(RequestPacket(req, from), from)
   }
 
   private def decodeResponseBody(request: RequestPacket, data: ByteString, from: ActorRef): Delegation = {
-    def convert[A](o: A): Any = {
-      if(self == from) o else InternalResp(ResponsePacket(o, request), from)
+    def convert[A](o: A) = {
+      if(self == from) Inner(o)
+      else {
+        from ! ResponsePacket(o, request.who)
+        HandledCompletely
+      }
     }
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
-      Inner(convert(decode[A](data)))
+      convert(decode[A](data))
     }
 
     val apiKey = request.request.apiKey

@@ -22,6 +22,10 @@ case class Broker
       case _ ⇒ false
     }
   }
+
+  override val toString = {
+    s"node=${nodeId}, host=${host}, port=${port}, rack=${rack}"
+  }
 }
 
 object Broker {
@@ -33,6 +37,10 @@ class Brokers(b: Array[BrokerResponse]) {
   val length                 = b.length
   val brokers: Array[Broker] = b.sortBy(_.nodeId).map(Broker(_))
   val map: Map[Int, Broker]  = brokers.map(b ⇒ (b.nodeId, b)).toMap
+
+  override val toString = {
+    brokers.mkString("\n")
+  }
 
   override def equals(obj: scala.Any): Boolean = {
     obj match {

@@ -74,8 +74,6 @@ class ClusterService(val clusterId  : String,
     }
   }
 
-
-
   private def publishClusterReady = {
     def startMetaFetcher = {
       if(metaFetcher.isEmpty) {
@@ -91,13 +89,15 @@ class ClusterService(val clusterId  : String,
       }
       catch {
         case _: NoSuchElementException ⇒ log.warning("no one subscribed this event")
-        case e ⇒ throw e
+        case e: Throwable ⇒ throw e
       }
     }
 
     startMetaFetcher
     publish
   }
+
+  var lastMetaData: Option[MetaDataResponse] = None
 
   when(READY) {
     case Event(WorkerOnline, Dummy) ⇒ {
@@ -107,8 +107,13 @@ class ClusterService(val clusterId  : String,
       stay
     }
     case Event(e: MetaDataRequest, _) ⇒ {
-      if(!send(e)) {
-        sender ! NotReady(e)
+      if(lastMetaData.isEmpty) {
+        if (!send(e)) {
+          sender ! NotReady(e)
+        }
+      }
+      else {
+        sender ! lastMetaData.get
       }
       stay
     }
@@ -116,16 +121,22 @@ class ClusterService(val clusterId  : String,
       forward(e)
       stay
     }
-    case Event(ResponsePacket(e: MetaDataResponse, req: RequestPacket), _) ⇒ {
-      val newBrokers = Brokers(e.brokers)
-      if(brokers != newBrokers) {
-        log.info("new brokers are different")
-        brokers = newBrokers
-        connection.foreach(_ ! brokers)
+    case Event(ResponsePacket(e: MetaDataResponse, who: ActorRef), _) ⇒ {
+      if(e.controllerId >= 0 && who == self) {
+        lastMetaData = Some(e)
+        val newBrokers = Brokers(e.brokers)
+        if (brokers != newBrokers) {
+          log.info("new brokers are different")
+          log.info(brokers.toString)
+          log.info(newBrokers.toString)
+
+          brokers = newBrokers
+          connection.foreach(_ ! brokers)
+        }
       }
 
-      if(req.who != self) {
-        req.who ! e
+      if(who != self) {
+        who ! e
       }
 
       stay
@@ -140,6 +151,8 @@ class ClusterService(val clusterId  : String,
     context stop bootstrap
 
     brokers = Brokers(meta.brokers)
+
+    lastMetaData = Some(meta)
 
     connection = Some(context.actorOf(BrokerService.props(
           brokers  = brokers,

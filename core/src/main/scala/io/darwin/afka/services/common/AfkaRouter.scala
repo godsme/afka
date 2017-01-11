@@ -47,10 +47,7 @@ trait AfkaRouter extends Actor with ActorLogging {
   }
 
   def restartWorker(n: Int, i: Int) = {
-    workers.get(n).fold {
-      addWorker(i)
-    }
-    { case (who, _) ⇒
+    workers.get(n).fold( addWorker(i) ) { case (who, _) ⇒
       log.info(s"restart ${who}")
       context.stop(who)
     }
@@ -97,7 +94,7 @@ trait AfkaRouter extends Actor with ActorLogging {
   private def onWorkerOffline(cause: String) = {
     log.warning(s"worker ${sender} offline: ${cause}")
 
-    router = router.removeRoutee(sender())
+    router = router.removeRoutee(sender)
     workers(getIndex) = (sender, false)
     if(router.routees.size == 0) {
       listener ! WorkerOffline("all workers offline")
