@@ -63,6 +63,18 @@ class KafkaTopic( val id         : String,
 class KafkaCluster( val brokers : Map[Int, KafkaBroker],
                     val topics  : Map[String, KafkaTopic] ) {
 
+  def getMetaByTopic(_topics: Array[String]): KafkaCluster = {
+    var newTopics: Map[String, KafkaTopic] = Map.empty
+
+    _topics.foreach { topic ⇒
+      topics.get(topic).foreach { content ⇒
+        newTopics += topic → content
+      }
+    }
+
+    new KafkaCluster(brokers, newTopics)
+  }
+
   def getPartitionsByTopic(topic: String): Option[Array[KafkaPartition]] = {
     topics.get(topic).map(_.partitions)
   }
@@ -103,5 +115,6 @@ object KafkaCluster {
 
     topics
   }
+
 }
 

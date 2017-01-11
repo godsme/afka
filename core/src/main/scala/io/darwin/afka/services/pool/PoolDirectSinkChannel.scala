@@ -2,7 +2,6 @@ package io.darwin.afka.services.pool
 
 import akka.actor.Actor
 import akka.contrib.pattern.ReceivePipeline.Inner
-import io.darwin.afka.services.common.ResponsePacket
 
 /**
   * Created by darwin on 4/1/2017.
@@ -18,7 +17,5 @@ trait PoolDirectSinkChannel extends PoolSinkChannel {
     case Echo ⇒ {
       onChannelReady(sender())
     }
-    case ResponsePacket(rsp, _) ⇒
-      Inner(rsp)
   }
 }

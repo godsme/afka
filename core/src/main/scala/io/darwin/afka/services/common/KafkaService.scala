@@ -15,8 +15,7 @@ import io.darwin.afka.byteOrder
 
 import scala.collection.mutable.Map
 
-case class RequestPacket(request: KafkaRequest, who: ActorRef)
-case class ResponsePacket(response: Any, who: ActorRef)
+//case class ResponsePacket(response: Any, who: ActorRef)
 
 /**
   * Created by darwin on 27/12/2016.
@@ -46,7 +45,7 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
 
   private var socket: Option[ActorRef] = None
 
-  private var pendingRequests: Map[Int,  (RequestPacket, ActorRef)] = Map.empty
+  private var pendingRequests: Map[Int,  (KafkaRequest, ActorRef)] = Map.empty
 
   protected def doSend[A <: KafkaRequest](req: A) = {
     if(socket.isDefined) {
@@ -58,28 +57,29 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
     }
   }
 
-  protected def send(request: RequestPacket, from: ActorRef = self) = {
-    doSend(request.request)
+  private def send(request: KafkaRequest, from: ActorRef = self) = {
+    doSend(request)
     pendingRequests += lastCorrelationId → (request, from)
   }
 
-  override def sending[A <: KafkaRequest](req: A, from: ActorRef = self) = {
-    send(RequestPacket(req, from), from)
+  def sending[A <: KafkaRequest](req: A, from: ActorRef = self): Unit = {
+    send(req, from)
   }
 
-  private def decodeResponseBody(request: RequestPacket, data: ByteString, from: ActorRef): Delegation = {
+  private def decodeResponseBody(request: KafkaRequest, data: ByteString, from: ActorRef): Delegation = {
     def convert[A](o: A) = {
       if(self == from) Inner(o)
       else {
-        from ! ResponsePacket(o, request.who)
+        from ! o
         HandledCompletely
       }
     }
+
     def decodeRsp[A](data: ByteString)(implicit decoder: KafkaDecoder[A]) = {
       convert(decode[A](data))
     }
 
-    val apiKey = request.request.apiKey
+    val apiKey = request.apiKey
     if(apiKey == GroupCoordinateRequest.apiKey)   decodeRsp[GroupCoordinateResponse](data)
     else if(apiKey == MetaDataRequest.apiKey)     decodeRsp[MetaDataResponse](data)
     else if(apiKey == HeartBeatRequest.apiKey)    decodeRsp[HeartBeatResponse](data)

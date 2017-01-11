@@ -69,7 +69,7 @@ trait AfkaRouter extends Actor with ActorLogging {
     case WorkerOnline               ⇒ onWorkerOnline
     case WorkerOffline(cause)       ⇒ onWorkerOffline(cause)
     case Terminated(who: ActorRef)  ⇒ onWorkerDown(who)
-    case e                          ⇒ onRoutingRequest(e)
+    case req: KafkaRequest          ⇒ onRoutingRequest(req)
   }
 
   private def onWorkerOnline = {
@@ -101,7 +101,7 @@ trait AfkaRouter extends Actor with ActorLogging {
     }
   }
 
-  private def onRoutingRequest(o: Any) = {
+  private def onRoutingRequest(o: KafkaRequest) = {
     if(!send(o)) {
       sender ! NotReady(o)
     }

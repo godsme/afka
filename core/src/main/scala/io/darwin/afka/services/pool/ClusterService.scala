@@ -45,19 +45,19 @@ class ClusterService(val clusterId  : String,
   var bootstrap = context.actorOf(BootStrapService.props(bootstraps, self))
   var connection: Option[ActorRef] = None
 
-  private def doSend[A <: KafkaRequest](req: A, who: ActorRef)(sending : (ActorRef, Any) ⇒ Unit): Boolean = {
+  private def doSend(req: Any)(sending : (ActorRef, Any) ⇒ Unit): Boolean = {
     connection.fold(false) { c ⇒
-      sending(c, RequestPacket(req, who))
+      sending(c, req)
       true
     }
   }
 
-  private def send[A <: KafkaRequest](req: A, who: ActorRef = sender()): Boolean = {
-    doSend(req, who)((c, m) ⇒ c ! m)
+  private def send(req: Any): Boolean = {
+    doSend(req)((c, m) ⇒ c ! m)
   }
 
-  private def forward[A <: KafkaRequest](req: A, who: ActorRef = sender()): Boolean = {
-    doSend(req, who)((c, m) ⇒ c.forward(m))
+  private def forward(req: Any): Boolean = {
+    doSend(req)((c, m) ⇒ c.forward(m))
   }
 
   var brokers: Brokers = Brokers(Array.empty)
@@ -78,7 +78,7 @@ class ClusterService(val clusterId  : String,
     def startMetaFetcher = {
       if(metaFetcher.isEmpty) {
         import ExecutionContext.Implicits.global
-        metaFetcher = Some(context.system.scheduler.schedule(0 milli, 5 second)(send(MetaDataRequest(), self)))
+        metaFetcher = Some(context.system.scheduler.schedule(0 milli, 5 second)(send(MetaDataRequest())))
       }
     }
 
@@ -121,8 +121,8 @@ class ClusterService(val clusterId  : String,
       forward(e)
       stay
     }
-    case Event(ResponsePacket(e: MetaDataResponse, who: ActorRef), _) ⇒ {
-      if(e.controllerId >= 0 && who == self) {
+    case Event(e:MetaDataResponse, _) ⇒ {
+      if(e.controllerId >= 0) {
         lastMetaData = Some(e)
         val newBrokers = Brokers(e.brokers)
         if (brokers != newBrokers) {
@@ -135,13 +135,9 @@ class ClusterService(val clusterId  : String,
         }
       }
 
-      if(who != self) {
-        who ! e
-      }
-
       stay
     }
-    case Event(NotReady(RequestPacket(o, _)), _) ⇒ {
+    case Event(NotReady(o), _) ⇒ {
       send(o)
       stay
     }
@@ -159,7 +155,6 @@ class ClusterService(val clusterId  : String,
           clientId = "push-service",
           listener = self),
       "broker-service"))
-
   }
 
 }

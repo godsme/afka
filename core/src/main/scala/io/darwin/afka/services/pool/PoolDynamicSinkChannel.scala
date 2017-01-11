@@ -2,7 +2,6 @@ package io.darwin.afka.services.pool
 
 import akka.actor.{ActorIdentity, Identify}
 import akka.contrib.pattern.ReceivePipeline.{HandledCompletely, Inner}
-import io.darwin.afka.services.common.ResponsePacket
 
 /**
   * Created by darwin on 4/1/2017.
@@ -24,8 +23,6 @@ trait PoolDynamicSinkChannel extends PoolSinkChannel {
           context stop self
           HandledCompletely
       }
-    case ResponsePacket(rsp, _) ⇒
-      Inner(rsp)
   }
 
 }

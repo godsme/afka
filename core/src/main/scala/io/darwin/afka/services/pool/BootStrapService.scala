@@ -5,7 +5,7 @@ import java.net.InetSocketAddress
 import akka.actor.{ActorRef, FSM, Props}
 import io.darwin.afka.packets.requests.{KafkaRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses.MetaDataResponse
-import io.darwin.afka.services.common.{RequestPacket, ResponsePacket, WorkerOnline}
+import io.darwin.afka.services.common.{ WorkerOnline}
 
 import scala.concurrent.duration._
 
@@ -35,7 +35,7 @@ class BootStrapService
   extends FSM[State, Data] {
 
   var bootstrap = context.actorOf(BootstrapMaster.props(bootstraps, self))
-  def send[A <: KafkaRequest](any: A) = bootstrap ! RequestPacket(any, self)
+  def send[A <: KafkaRequest](any: A) = bootstrap ! any
 
   startWith(INIT, Dummy)
 
@@ -51,7 +51,7 @@ class BootStrapService
       send(MetaDataRequest())
       stay
     }
-    case Event(ResponsePacket(r: MetaDataResponse, _), _) ⇒ {
+    case Event(r: MetaDataResponse, _) ⇒ {
       if(r.controllerId < 0) stay
       else {
         listener ! r

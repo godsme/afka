@@ -53,7 +53,6 @@ object BrokerConnection {
     }
 
     when(CONNECTED) {
-      case Event(r:RequestPacket, _) ⇒ handleRequest(r)
       case Event(e:KafkaRequest, _) ⇒ {
         sending(e, sender)
         stay
@@ -67,11 +66,6 @@ object BrokerConnection {
       listener ! WorkerOffline(cause)
       closeConnection
       goto(DISCONNECT)
-    }
-
-    def handleRequest(request: RequestPacket) = {
-      send(request, sender)
-      stay
     }
 
     whenUnhandled {

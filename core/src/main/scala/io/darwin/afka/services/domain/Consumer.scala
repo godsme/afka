@@ -7,7 +7,6 @@ import io.darwin.afka.TopicId
 import io.darwin.afka.domain.KafkaCluster
 import io.darwin.afka.packets.requests.{GroupCoordinateRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses._
-import io.darwin.afka.services.common.ResponsePacket
 import io.darwin.afka.services.pool.ClusterService.ClusterChanged
 
 import scala.concurrent.ExecutionContext
@@ -77,8 +76,8 @@ class Consumer
     implicit val timeout: Timeout = Timeout(1 second)
 
     (cluster ? GroupCoordinateRequest(group)) onComplete {
-      case Success(ResponsePacket(c: GroupCoordinateResponse, _)) ⇒ onCoordinatorResp(c)
-      case _                                                      ⇒ context stop self
+      case Success(c: GroupCoordinateResponse) ⇒ onCoordinatorResp(c)
+      case _                                   ⇒ context stop self
     }
   }
 
