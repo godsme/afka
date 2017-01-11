@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef}
 import akka.contrib.pattern.ReceivePipeline
 import akka.contrib.pattern.ReceivePipeline.Inner
 import io.darwin.afka.packets.requests.KafkaRequest
-import io.darwin.afka.services.common.{ChannelConnected, KafkaServiceSinkChannel, ResponsePacket}
+import io.darwin.afka.services.common.{ChannelConnected, KafkaServiceSinkChannel}
 
 /**
   * Created by darwin on 8/1/2017.
