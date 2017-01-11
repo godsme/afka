@@ -15,7 +15,7 @@ class KafkaRequestElement extends scala.annotation.StaticAnnotation {
       }
       case cls@Defn.Class(_, name, _, ctor, _) => {
         val v = generateCompanion(createEncoders(name, ctor.paramss), cls, name)
-        println(v.toString())
+        //println(v.toString())
         v
       }
       case _ =>

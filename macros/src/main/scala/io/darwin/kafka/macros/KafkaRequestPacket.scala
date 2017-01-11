@@ -51,7 +51,7 @@ class KafkaRequestPacket(apiKey: Int, version: Int = 0) extends scala.annotation
 
         val parents = cls.templ.parents.+:(ctor"KafkaRequest")
         val newCls = cls.copy(templ = cls.templ.copy(parents = parents, stats = Some(newStats)))
-        println(newCls.toString())
+        //println(newCls.toString())
 
         val objApiKey  = q"def apiKey: Short = ${Term.Name(apiKeyValue.toString)}"
         val objVersion = q"def version: Short = ${Term.Name(versionValue.toString)}"

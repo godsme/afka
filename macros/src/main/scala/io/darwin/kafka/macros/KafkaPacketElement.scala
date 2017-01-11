@@ -15,7 +15,7 @@ class KafkaPacketElement extends scala.annotation.StaticAnnotation {
       }
       case cls@Defn.Class(_, name, _, ctor, _) => {
         val v = generateCompanion(createCodecs(name, ctor.paramss), cls, name)
-        println(v.toString())
+        //println(v.toString())
         v
       }
       case _ =>

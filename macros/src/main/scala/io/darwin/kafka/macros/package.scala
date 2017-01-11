@@ -8,25 +8,12 @@ import scala.meta.{Defn, _}
   */
 package object macros {
 
-//  private val wrapperTypes: Array[String] = Array("Option", "Array")
-//
-//  def isValidWrapperType(tp: String): Boolean = {
-//    wrapperTypes.contains(tp)
-//  }
-//
-//  private val predefinedTypes: Array[String] =
-//    Array("Boolean","Byte","Short","Int","Long","String","ByteBuffer")
-//
-//  def isPredefinedType(tp: String): Boolean = {
-//    predefinedTypes.contains(tp)
-//  }
-
   def createImports: Stat = {
-    q"import io.darwin.afka.decoder.{ArrayDecoder, KafkaDecoder, SourceChannel, NullableDecoder, decoding}"
+    q"import io.darwin.afka.decoder.{ ArrayDecoder, KafkaDecoder, SourceChannel, NullableDecoder, decoding }"
   }
 
   def createEncoderImports: Stat = {
-    q"import io.darwin.afka.encoder.{ArrayEncoder, NullableArrayEncoder, NullableObjectEncoder, KafkaEncoder, SinkChannel, encoding}"
+    q"import io.darwin.afka.encoder.{ ArrayEncoder, NullableArrayEncoder, NullableObjectEncoder, KafkaEncoder, SinkChannel, encoding }"
   }
 
   def createDecoderObject(name: Type.Name, paramss: Seq[Seq[Term.Param]]): Defn.Object = {
@@ -144,15 +131,6 @@ package object macros {
     val newObj = obj.copy(
       templ = obj.templ.copy(stats = Some(seqs)))
     Term.Block(Seq(cls, newObj))
-  }
-
-  def generateToString(cls: Defn.Class): Defn.Class = {
-    val toString =
-      q"""
-           override val toString: String = {
-           }
-      """
-    cls
   }
 
   def createCodecs(name: Type.Name, paramss: Seq[Seq[Term.Param]]) : Seq[Stat] = {

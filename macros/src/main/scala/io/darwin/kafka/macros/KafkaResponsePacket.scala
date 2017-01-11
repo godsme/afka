@@ -14,12 +14,12 @@ class KafkaResponsePacket extends scala.annotation.StaticAnnotation {
       Seq(cls @ Defn.Class(_, name, _, ctor, _),
       companion: Defn.Object)) => {
         val r = insertToObject(createPacketDecoder(name, ctor.paramss), cls, companion)
-        println(r.toString())
+        //println(r.toString())
         r
       }
       case cls @ Defn.Class(_, name, _, ctor, _) => {
         val r = generateCompanion(createPacketDecoder(name, ctor.paramss), cls, name)
-        println(r.toString())
+        //println(r.toString())
         r
       }
       case _ =>

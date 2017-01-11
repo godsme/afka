@@ -5,7 +5,7 @@ import java.net.InetSocketAddress
 import akka.actor.{ActorRef, Cancellable, FSM, Props}
 import io.darwin.afka.TopicId
 import io.darwin.afka.domain.Brokers
-import io.darwin.afka.packets.requests.{GroupCoordinateRequest, KafkaRequest, MetaDataRequest}
+import io.darwin.afka.packets.requests.{GroupCoordinateRequest, MetaDataRequest}
 import io.darwin.afka.packets.responses.MetaDataResponse
 import io.darwin.afka.services.common._
 
@@ -34,7 +34,7 @@ object ClusterService {
   final case class  ClusterChanged()
 }
 
-import ClusterService._
+import io.darwin.afka.services.pool.ClusterService._
 
 class ClusterService(val clusterId  : String,
                      val bootstraps : Array[InetSocketAddress],
