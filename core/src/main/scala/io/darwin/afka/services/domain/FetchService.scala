@@ -1,11 +1,13 @@
 package io.darwin.afka.services.domain
 
+import java.net.InetSocketAddress
+
 import akka.actor.{ActorLogging, ActorRef, Cancellable, Props, Terminated}
 import io.darwin.afka.domain.FetchedMessages
 import io.darwin.afka.domain.FetchedMessages.{PartitionMessages, TopicMessages}
 import io.darwin.afka.domain.GroupOffsets.{NodeOffsets, PartitionOffsetInfo}
 import io.darwin.afka.packets.responses._
-import io.darwin.afka.services.common.{ChannelAddress, ChannelConnected, KafkaServiceSinkChannel}
+import io.darwin.afka.services.common.{ChannelAddress, ChannelConnected, KafkaService, KafkaServiceSinkChannel}
 import io.darwin.afka.services.pool.PoolDirectSinkChannel
 
 import scala.concurrent.duration._
@@ -80,10 +82,9 @@ object FetchService {
 
         msgs.msgs.foreach { case TopicMessages(topic, m) ⇒
           m.foreach { case PartitionMessages(partition, error, ms) ⇒
-            if (ms.isDefined)
-              offsets.updatePartition(topic, partition, PartitionOffsetInfo(ms.get.last.offset, error))
-            else
-              offsets.updatePartitionError(topic, partition, error)
+            ms.fold
+            { offsets.updatePartitionError(topic, partition, error) }
+            { mss ⇒ offsets.updatePartition(topic, partition, PartitionOffsetInfo(mss.last.offset, error)) }
           }
         }
 
@@ -97,21 +98,21 @@ object FetchService {
   }
 }
 
-class FetchService
-  ( val channel    : ChannelAddress,
-    val clientId   : String,
-    val offsets    : NodeOffsets)
-  extends FetchService.Actor with PoolDirectSinkChannel {
-
-  def path: String = "/user/push-service/cluster/broker-service/" + channel.nodeId
-}
-
 //class FetchService
-//( val channel    : ChannelAddress,
-//  val clientId   : String,
-//  val offsets    : NodeOffsets)
-//  extends FetchService.Actor with KafkaService {
+//  ( val channel    : ChannelAddress,
+//    val clientId   : String,
+//    val offsets    : NodeOffsets)
+//  extends FetchService.Actor with PoolDirectSinkChannel {
 //
-//  val remote = new InetSocketAddress(channel.host, channel.port)
+//  def path: String = "/user/push-service/cluster/broker-service/" + channel.nodeId
 //}
+
+class FetchService
+( val channel    : ChannelAddress,
+  val clientId   : String,
+  val offsets    : NodeOffsets)
+  extends FetchService.Actor with KafkaService {
+
+  val remote = new InetSocketAddress(channel.host, channel.port)
+}
 

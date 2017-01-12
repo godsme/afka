@@ -2,7 +2,7 @@ package io.darwin.afka.services.pool
 
 import java.net.InetSocketAddress
 
-import akka.actor.{ActorRef, Cancellable, FSM, Props}
+import akka.actor.{ActorRef, Cancellable, FSM}
 import io.darwin.afka.TopicId
 import io.darwin.afka.domain.Brokers
 import io.darwin.afka.packets.requests.{GroupCoordinateRequest, MetaDataRequest}
@@ -20,7 +20,7 @@ object ClusterService {
   def props( clusterId  : String,
              bootstraps : Array[InetSocketAddress],
              listener   : ActorRef) = {
-    Props(classOf[ClusterService], clusterId, bootstraps, listener)
+    akka.actor.Props(classOf[ClusterService], clusterId, bootstraps, listener)
   }
 
   sealed trait State

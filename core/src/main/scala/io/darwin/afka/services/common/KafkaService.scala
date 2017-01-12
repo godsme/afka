@@ -105,6 +105,8 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
     }
     else {
       pendingRequests -= id
+      if(pendingRequests.size > 0)
+      log.info(s"# of pending request = ${pendingRequests.size}, ${req.get._1.apiKey} ${req.get._2}")
       val r = req.get
       decodeResponseBody(r._1, data.slice(4, data.length), r._2)
     }

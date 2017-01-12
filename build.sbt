@@ -47,6 +47,7 @@ lazy val core = project.settings(
     "com.typesafe.akka" %% "akka-http-jackson" % "10.0.1",
     "com.typesafe.akka" %% "akka-http-xml" % "10.0.1",
     "com.typesafe.akka" %% "akka-contrib" % "2.4.16",
+    "com.typesafe.akka" %% "akka-agent" % "2.4.16",
     // Test dependencies
     "org.scalatest"                  %% "scalatest" % "3.0.1" % "test",
     "org.scalactic"                  %% "scalactic" % "3.0.1",

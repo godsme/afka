@@ -19,7 +19,8 @@ trait PoolSinkChannel extends KafkaServiceSinkChannel with ReceivePipeline with 
   protected def send(o: Any) = {
     target.fold {
       context.actorSelection(path) ! o
-    } { to ⇒ to ! o }
+    }
+    { to ⇒ to ! o }
   }
 
   override def sending[A <: KafkaRequest](req: A, from: ActorRef = self) = {
