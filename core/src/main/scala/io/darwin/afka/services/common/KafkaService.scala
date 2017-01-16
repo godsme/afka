@@ -13,7 +13,7 @@ import io.darwin.afka.packets.requests._
 import io.darwin.afka.packets.responses._
 import io.darwin.afka.byteOrder
 
-import scala.collection.mutable.Map
+import scala.collection.mutable.MutableList
 
 //case class ResponsePacket(response: Any, who: ActorRef)
 
@@ -45,7 +45,8 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
 
   private var socket: Option[ActorRef] = None
 
-  private var pendingRequests: Map[Int,  (KafkaRequest, ActorRef)] = Map.empty
+  //private var pendingRequests: Map[Int,  (KafkaRequest, ActorRef)] = Map.empty
+  private var pendingRequests: MutableList[(Int, (KafkaRequest, ActorRef))] = MutableList.empty
 
   protected def doSend[A <: KafkaRequest](req: A) = {
     if(socket.isDefined) {
@@ -59,7 +60,7 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
 
   private def send(request: KafkaRequest, from: ActorRef = self) = {
     doSend(request)
-    pendingRequests += lastCorrelationId → (request, from)
+    pendingRequests.+=( (lastCorrelationId, (request, from)) )
   }
 
   def sending[A <: KafkaRequest](req: A, from: ActorRef = self): Unit = {
@@ -94,19 +95,28 @@ trait KafkaService extends KafkaServiceSinkChannel with ReceivePipeline {
     }
   }
 
+  private def onCorrelationReceive(id: Int): Option[(KafkaRequest, ActorRef)] = {
+    pendingRequests = pendingRequests.dropWhile(_._1 != id)
+
+    if(pendingRequests.isEmpty) None
+    else {
+      Some(pendingRequests.head._2)
+    }
+  }
   private def decodeResponse(data: ByteString): Delegation = {
     val id = data.iterator.getInt
-    val req = pendingRequests.get(id)
+    val req = onCorrelationReceive(id)
 
     if(req.isEmpty) {
-      log.error(s"the received correlation id ${id} != ${lastCorrelationId}")
+      log.error(s"the received correlation id ${id} cannot be found. ${lastCorrelationId}")
       suicide
       HandledCompletely
     }
     else {
-      pendingRequests -= id
+      pendingRequests = pendingRequests.tail
+
       if(pendingRequests.size > 0)
-      log.info(s"# of pending request = ${pendingRequests.size}, ${req.get._1.apiKey} ${req.get._2}")
+      log.info(s"# of pending request = ${pendingRequests.size}, ${req.get._1.apiKey} ${req.get._2} ${id}~${lastCorrelationId}")
       val r = req.get
       decodeResponseBody(r._1, data.slice(4, data.length), r._2)
     }
